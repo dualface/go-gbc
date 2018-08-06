@@ -20,10 +20,52 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package gbc
+package impl
+
+import (
+    "fmt"
+)
+
+type State string
+
+const (
+    // Idle => Starting => Running => Stopping => Idle
+    Idle     State = "idle"
+    Starting State = "starting"
+    Running  State = "running"
+    Stopping State = "stopping"
+)
 
 type (
-	WriteMessage interface {
-		WriteMessage(m *RawMessage)
-	}
+    BasicState struct {
+        state State
+        seq   []State
+    }
 )
+
+func NewBasicState() *BasicState {
+    s := &BasicState{
+        state: Idle,
+        seq:   []State{Idle, Starting, Running, Stopping, Idle},
+    }
+    return s
+}
+
+func (s *BasicState) Current() State {
+    return s.state
+}
+
+func (s *BasicState) To(next State) (err error) {
+    for i, state := range s.seq {
+        if state != s.state {
+            continue
+        }
+
+        if s.seq[i+1] != next {
+            err = fmt.Errorf("current state is not '%s', can not '%s'", s.state, next)
+            return
+        }
+    }
+    s.state = next
+    return nil
+}

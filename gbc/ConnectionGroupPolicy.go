@@ -23,7 +23,7 @@
 package gbc
 
 type (
-	ConnectionGroupPolicy interface {
-		GetGroup(c Connection) ConnectionGroup
-	}
+    ConnectionGroupPolicy interface {
+        GetGroup(c Connection) ConnectionGroup
+    }
 )

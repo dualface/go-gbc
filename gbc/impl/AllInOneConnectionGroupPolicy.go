@@ -23,22 +23,22 @@
 package impl
 
 import (
-	"github.com/dualface/go-gbc/gbc"
+    "github.com/dualface/go-gbc/gbc"
 )
 
 type (
-	AllInOneConnectionGroupPolicy struct {
-		cg gbc.ConnectionGroup
-	}
+    AllInOneConnectionGroupPolicy struct {
+        group gbc.ConnectionGroup
+    }
 )
 
-func NewAllInOneConnectionGroupPolicy() gbc.ConnectionGroupPolicy {
-	gp := &AllInOneConnectionGroupPolicy{
-		cg: NewBasicConnectionGroup(),
-	}
-	return gp
+func NewAllInOneConnectionGroupPolicy(conf *gbc.ConnectionGroupConfig) gbc.ConnectionGroupPolicy {
+    p := &AllInOneConnectionGroupPolicy{
+        group: NewBasicConnectionGroup(conf),
+    }
+    return p
 }
 
-func (gp *AllInOneConnectionGroupPolicy) GetGroup(c gbc.Connection) gbc.ConnectionGroup {
-	return gp.cg
+func (p *AllInOneConnectionGroupPolicy) GetGroup(c gbc.Connection) gbc.ConnectionGroup {
+    return p.group
 }

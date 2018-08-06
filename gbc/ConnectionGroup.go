@@ -22,13 +22,29 @@
 
 package gbc
 
-type (
-	ConnectionGroup interface {
-		AddConnection(c Connection) error
-		RemoveConnection(c Connection) error
-		RemoveAllConnections()
-		CloseAllConnections()
-	}
-
-	ConnectionGroupsMap = map[ConnectionGroup]bool
+const (
+    poolInitSize         = 10000
+    messageQueueInitSize = 100000
 )
+
+type (
+    ConnectionGroupConfig struct {
+        PoolInitSize         int
+        MessageQueueInitSize int
+    }
+
+    ConnectionGroup interface {
+        Add(c Connection) error
+        Remove(c Connection) error
+        RemoveAll()
+        CloseAll()
+        Broadcast(b []byte)
+    }
+
+    ConnectionGroupsMap = map[ConnectionGroup]bool
+)
+
+var DefaultConnectionGroupConfig = &ConnectionGroupConfig{
+    PoolInitSize:         poolInitSize,
+    MessageQueueInitSize: messageQueueInitSize,
+}

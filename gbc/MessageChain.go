@@ -21,11 +21,3 @@
 // SOFTWARE.
 
 package gbc
-
-const (
-	MessageQueueInitSize = 100000
-
-	ConnectionsPoolInitSize    = 10000
-	ConnectionReadBufferSize   = 1024 * 4 // 4KB
-	ConnectionReadFailureLimit = 3
-)

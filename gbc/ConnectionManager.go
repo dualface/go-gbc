@@ -23,12 +23,13 @@
 package gbc
 
 import (
-	"net"
+    "net"
 )
 
 type (
-	ConnectionManager interface {
-		SetConnectionGroupPolicy(p ConnectionGroupPolicy)
-		Start(l net.Listener) (err error)
-	}
+    OnConnectHandler func(c net.Conn) Connection
+
+    ConnectionManager interface {
+        Start(l net.Listener) error
+    }
 )

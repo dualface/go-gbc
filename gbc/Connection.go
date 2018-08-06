@@ -22,10 +22,26 @@
 
 package gbc
 
-type (
-	Connection interface {
-		SetMessageChan(chan *RawMessage)
-		Start()
-		Close() error
-	}
+const (
+    readBufferSize   = 1024 * 4 // 4KB
+    readFailureLimit = 3
 )
+
+type (
+    ConnectionConfig struct {
+        ReadBufferSize   int
+        ReadFailureLimit int
+    }
+
+    Connection interface {
+        SetMessageChan(c chan RawMessage)
+        Start()
+        Close() error
+        Write(b []byte) (int, error)
+    }
+)
+
+var DefaultConnectionConfig = &ConnectionConfig{
+    ReadBufferSize:   readBufferSize,
+    ReadFailureLimit: readFailureLimit,
+}

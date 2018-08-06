@@ -22,17 +22,10 @@
 
 package gbc
 
-const (
-	ProtobufMessage MessageType = 1
-	ClangMessage    MessageType = 2
-)
-
 type (
-	MessageType = uint16
-
-	RawMessage interface {
-		DataType() MessageType
-		DataBytes() []byte
-		String() string
-	}
+    RawMessage interface {
+        DataType() int
+        DataBytes() []byte
+        GenBytes() []byte
+    }
 )

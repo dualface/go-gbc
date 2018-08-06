@@ -23,31 +23,39 @@
 package main
 
 import (
-	"fmt"
-	"github.com/dualface/go-gbc/gbc/impl"
-	"net"
-	"os"
+    "fmt"
+    "net"
+    "os"
+
+    "github.com/dualface/go-gbc/gbc"
+    "github.com/dualface/go-gbc/gbc/impl"
 )
 
 const (
-	Host = "localhost"
-	Port = "27010"
+    Host = "localhost"
+    Port = "27010"
 )
 
 func main() {
-	addr := fmt.Sprintf("%s:%s", Host, Port)
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		exitByErr(err)
-	}
+    addr := fmt.Sprintf("%s:%s", Host, Port)
+    l, err := net.Listen("tcp", addr)
+    if err != nil {
+        exitByErr(err)
+    }
 
-	cm := impl.NewBasicConnectionManager("testserver")
-	if err := cm.Start(l); err != nil {
-		exitByErr(err)
-	}
+    policy := impl.NewAllInOneConnectionGroupPolicy(nil)
+    cm := impl.NewBasicConnectionManager("testserver", connectHandler, policy)
+    if err := cm.Start(l); err != nil {
+        exitByErr(err)
+    }
+}
+
+func connectHandler(rawConn net.Conn) gbc.Connection {
+    c := impl.NewBasicConnection(rawConn, nil)
+    return c
 }
 
 func exitByErr(err error) {
-	fmt.Printf("[ERR] %s\n\n", err)
-	os.Exit(1)
+    fmt.Printf("[ERR] %s\n\n", err)
+    os.Exit(1)
 }

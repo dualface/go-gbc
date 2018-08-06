@@ -23,102 +23,112 @@
 package impl
 
 import (
-	"github.com/dualface/go-cli-colorlog"
-	"github.com/dualface/go-gbc/gbc"
-	"net"
-	"os"
-	"os/signal"
-	"strings"
-	"sync"
+    "net"
+    "os"
+    "os/signal"
+    "strings"
+    "sync"
+
+    "github.com/dualface/go-cli-colorlog"
+    "github.com/dualface/go-gbc/gbc"
 )
 
 type (
-	BasicConnectionManager struct {
-		name  string
-		cgp   gbc.ConnectionGroupPolicy
-		cgs   gbc.ConnectionGroupsMap
-		cc    chan string
-		mutex *sync.Mutex
-	}
+    BasicConnectionManager struct {
+        name   string
+        ch     gbc.OnConnectHandler
+        policy gbc.ConnectionGroupPolicy
+        groups gbc.ConnectionGroupsMap
+        cc     chan string
+        mutex  *sync.Mutex
+    }
 )
 
-func NewBasicConnectionManager(name string) gbc.ConnectionManager {
-	cm := &BasicConnectionManager{
-		name:  name,
-		cgp:   NewAllInOneConnectionGroupPolicy(),
-		cgs:   make(gbc.ConnectionGroupsMap),
-		cc:    make(chan string),
-		mutex: &sync.Mutex{},
-	}
+func NewBasicConnectionManager(name string, handler gbc.OnConnectHandler, policy gbc.ConnectionGroupPolicy) gbc.ConnectionManager {
+    if handler == nil {
+        handler = defaultOnConnectHandler
+    }
+    if policy == nil {
+        policy = NewAllInOneConnectionGroupPolicy(nil)
+    }
+    cm := &BasicConnectionManager{
+        name:   name,
+        ch:     handler,
+        policy: policy,
+        groups: make(gbc.ConnectionGroupsMap),
+        cc:     make(chan string),
+        mutex:  &sync.Mutex{},
+    }
 
-	return cm
+    return cm
 }
 
-func (cm *BasicConnectionManager) SetConnectionGroupPolicy(p gbc.ConnectionGroupPolicy) {
-	cm.cgp = p
-}
+// interface ConnectionManager
 
 func (cm *BasicConnectionManager) Start(l net.Listener) (err error) {
-	clog.PrintInfo("[%s] listening at: %s", cm.name, l.Addr().String())
+    clog.PrintInfo("[%s] listening at: %s", cm.name, l.Addr().String())
 
-	// handle CTRL+C
-	signCh := make(chan os.Signal)
-	signal.Notify(signCh, os.Interrupt)
-	go func() {
-		<-signCh
-		// sig is a ^C, handle it
-		clog.PrintInfo("[%s] signal os.Interrupt captured", cm.name)
-		cm.cc <- "stop"
-	}()
+    // handle CTRL+C
+    signCh := make(chan os.Signal)
+    signal.Notify(signCh, os.Interrupt)
+    go func() {
+        <-signCh
+        // sig is a ^C, handle it
+        clog.PrintInfo("[%s] signal os.Interrupt captured", cm.name)
+        cm.cc <- "stop"
+    }()
 
-	// handle connect
-	go cm.startAcceptConnect(l)
+    // handle connect
+    go cm.startAcceptConnect(l)
 
-	// waiting for connect, command
+    // waiting for connect, command
 loop:
-	for {
-		select {
-		case cmd := <-cm.cc:
-			cmd = strings.ToLower(cmd)
-			clog.PrintInfo("[%s] get command '%s'", cm.name, cmd)
-			if cmd == "stop" {
-				break loop
-			}
-		}
-	}
+    for {
+        select {
+        case cmd := <-cm.cc:
+            cmd = strings.ToLower(cmd)
+            clog.PrintInfo("[%s] get command '%s'", cm.name, cmd)
+            if cmd == "stop" {
+                break loop
+            }
+        }
+    }
 
-	// stop accept new connect
-	l.Close()
+    // stop accept new connect
+    l.Close()
 
-	// waiting for all messages has processed
+    // close all connections
+    for group := range cm.groups {
+        group.CloseAll()
+    }
 
-	// close all connections
-	for cg := range cm.cgs {
-		cg.CloseAllConnections()
-	}
-
-	clog.PrintInfo("[%s] shutdown", cm.name)
-	return
+    clog.PrintInfo("[%s] shutdown", cm.name)
+    return
 }
 
 // private
 
 func (cm *BasicConnectionManager) startAcceptConnect(l net.Listener) {
-	for {
-		rawConn, err := l.Accept()
-		if err != nil {
-			if !strings.Contains(err.Error(), "use of closed network connection") {
-				clog.PrintWarn(err.Error())
-			}
-			continue
-		}
+    for {
+        rawConn, err := l.Accept()
+        if err != nil {
+            if !strings.Contains(err.Error(), "use of closed network connection") {
+                clog.PrintWarn(err.Error())
+            }
+            continue
+        }
 
-		conn := NewBasicConnection(rawConn)
-		cg := cm.cgp.GetGroup(conn)
-		cm.cgs[cg] = true
-		cg.AddConnection(conn)
+        // add connection to group
+        conn := cm.ch(rawConn)
+        cg := cm.policy.GetGroup(conn)
+        cg.Add(conn)
+        cm.groups[cg] = true
 
-		// start connection message loop
-		conn.Start()
-	}
+        // start connection message loop
+        conn.Start()
+    }
+}
+
+func defaultOnConnectHandler(rawConn net.Conn) gbc.Connection {
+    return NewBasicConnection(rawConn, nil)
 }

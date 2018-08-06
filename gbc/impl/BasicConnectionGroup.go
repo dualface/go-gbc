@@ -23,83 +23,150 @@
 package impl
 
 import (
-	"fmt"
-	"github.com/dualface/go-cli-colorlog"
-	"github.com/dualface/go-gbc/gbc"
-	"sync"
+    "fmt"
+    "sync"
+
+    "github.com/dualface/go-cli-colorlog"
+    "github.com/dualface/go-gbc/gbc"
 )
 
 type (
-	connectionsMap = map[gbc.Connection]bool
+    connectionsMap = map[gbc.Connection]bool
 
-	BasicConnectionGroup struct {
-		cmap  connectionsMap
-		mc    chan *gbc.RawMessage
-		mutex *sync.Mutex
-	}
+    BasicConnectionGroup struct {
+        conf    *gbc.ConnectionGroupConfig
+        cmap    connectionsMap
+        mc      chan gbc.RawMessage
+        cc      chan string
+        running bool
+        mutex   *sync.Mutex
+    }
 
-	ConnectionGroupsMap = map[*BasicConnectionGroup]bool
+    ConnectionGroupsMap = map[*BasicConnectionGroup]bool
 )
 
-func NewBasicConnectionGroup() gbc.ConnectionGroup {
-	cg := &BasicConnectionGroup{
-		cmap:  make(connectionsMap, gbc.ConnectionsPoolInitSize),
-		mc:    make(chan *gbc.RawMessage, gbc.MessageQueueInitSize),
-		mutex: &sync.Mutex{},
-	}
-	return cg
+func NewBasicConnectionGroup(conf *gbc.ConnectionGroupConfig) gbc.ConnectionGroup {
+    if conf == nil {
+        conf = gbc.DefaultConnectionGroupConfig
+    }
+    g := &BasicConnectionGroup{
+        conf:    conf,
+        cmap:    make(connectionsMap, conf.PoolInitSize),
+        mc:      make(chan gbc.RawMessage, conf.MessageQueueInitSize),
+        cc:      make(chan string),
+        running: true,
+        mutex:   &sync.Mutex{},
+    }
+
+    go g.loop()
+
+    return g
 }
 
 // interface ConnectionGroup
 
-func (cg *BasicConnectionGroup) AddConnection(c gbc.Connection) error {
-	cg.mutex.Lock()
-	defer cg.mutex.Unlock()
+func (g *BasicConnectionGroup) Add(c gbc.Connection) error {
+    g.mutex.Lock()
+    defer g.mutex.Unlock()
 
-	_, ok := cg.cmap[c]
-	if ok {
-		return fmt.Errorf("connection '%p' already exists in group '%p'", &c, cg)
-	}
-	c.SetMessageChan(cg.mc)
-	cg.cmap[c] = true
-	return nil
+    _, ok := g.cmap[c]
+    if ok {
+        return fmt.Errorf("connection '%p' already exists in group '%p'", &c, g)
+    }
+    g.cmap[c] = true
+
+    // forward message from connection
+    c.SetMessageChan(g.mc)
+
+    return nil
 }
 
-func (cg *BasicConnectionGroup) RemoveConnection(c gbc.Connection) error {
-	cg.mutex.Lock()
-	defer cg.mutex.Unlock()
+func (g *BasicConnectionGroup) Remove(c gbc.Connection) error {
+    g.mutex.Lock()
+    defer g.mutex.Unlock()
 
-	_, ok := cg.cmap[c]
-	if !ok {
-		return fmt.Errorf("not found connection '%p' in group '%p'", &c, cg)
-	}
-	c.SetMessageChan(nil)
-	delete(cg.cmap, c)
-	return nil
+    _, ok := g.cmap[c]
+    if !ok {
+        return fmt.Errorf("not found connection '%p' in group '%p'", &c, g)
+    }
+
+    c.SetMessageChan(nil)
+
+    delete(g.cmap, c)
+    return nil
 }
 
-func (cg *BasicConnectionGroup) RemoveAllConnections() {
-	cg.mutex.Lock()
-	cmap := cg.cmap
-	cg.cmap = make(connectionsMap, gbc.ConnectionsPoolInitSize)
-	cg.mutex.Unlock()
+func (g *BasicConnectionGroup) RemoveAll() {
+    g.mutex.Lock()
+    cmap := g.cmap
+    g.cmap = make(connectionsMap, g.conf.PoolInitSize)
+    g.mutex.Unlock()
 
-	for c := range cmap {
-		c.SetMessageChan(nil)
-	}
+    for c := range cmap {
+        c.SetMessageChan(nil)
+    }
 }
 
-func (cg *BasicConnectionGroup) CloseAllConnections() {
-	cg.mutex.Lock()
-	cmap := cg.cmap
-	cg.cmap = make(connectionsMap, gbc.ConnectionsPoolInitSize)
-	cg.mutex.Unlock()
+func (g *BasicConnectionGroup) CloseAll() {
+    if g.running {
+        g.cc <- "stop"
+    }
 
-	for c := range cmap {
-		c.SetMessageChan(nil)
-		err := c.Close()
-		if err != nil {
-			clog.PrintWarn("close connection failed, %s", err)
-		}
-	}
+    clist := g.makeConnList()
+    g.cmap = make(connectionsMap, g.conf.PoolInitSize)
+
+    for _, c := range clist {
+        c.SetMessageChan(nil)
+    }
+
+    go func() {
+        for _, c := range clist {
+            c.Close()
+        }
+    }()
+}
+
+func (g *BasicConnectionGroup) Broadcast(b []byte) {
+    clist := g.makeConnList()
+
+    go func() {
+        // write message to all connections
+        for _, c := range clist {
+            c.Write(b)
+        }
+    }()
+}
+
+func (g *BasicConnectionGroup) makeConnList() []gbc.Connection {
+    g.mutex.Lock()
+    // copy connections to tmp array
+    clist := make([]gbc.Connection, len(g.cmap))
+    i := 0
+    for c := range g.cmap {
+        clist[i] = c
+        i++
+    }
+    g.mutex.Unlock()
+
+    return clist
+}
+
+// private
+
+func (g *BasicConnectionGroup) loop() {
+
+loop:
+    for {
+        select {
+        case msg := <-g.mc:
+            clog.PrintDebug("%s", msg)
+
+        case c := <-g.cc:
+            if c == "stop" {
+                break loop
+            }
+        }
+    }
+
+    g.running = false
 }
