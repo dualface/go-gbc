@@ -27,13 +27,15 @@ type (
         ByteWriter
     }
 
-    FilterAppender interface {
-        Append(f Filter)
+    InputFilter interface {
+        Filter
+        RawMessageSender
     }
 
     Pipeline interface {
         ByteWriter
-        FilterAppender
+
+        Append(f Filter)
     }
 
     InputPipeline interface {

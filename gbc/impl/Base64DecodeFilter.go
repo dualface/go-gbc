@@ -51,6 +51,39 @@ func NewBase64DecodeFilter() *Base64DecodeFilter {
 
 // interface Filter
 
+func (f *Base64DecodeFilter) WriteBytes(input []byte) ([]byte, error) {
+    avail := len(input)
+    output := input
+    write := output
+
+    used := f.fillTupleBuffer(input)
+    decodeLen1, _ := f.decodeTupleBuffer()
+
+    if used == avail {
+        // no more tuples
+        return f.decodeBuff[:decodeLen1], nil
+    }
+
+    if used < decodeLen1 {
+        return nil, fmt.Errorf("unexpected error")
+    } else if used >= decodeLen1 && decodeLen1 != 0 {
+        // copy decoded bytes to input buffer
+        copy(write, f.decodeBuff[:decodeLen1])
+        write = write[decodeLen1:]
+    }
+
+    // decode remains tuples
+    decodeLen2, _ := base64.StdEncoding.Decode(write, input[used:])
+    // copy not decoded tuples to tuple buffer
+    used += decodeLen2 * 8 / 6
+    copy(f.tupleBuff[f.tupleAvail:], input[used:])
+    f.tupleAvail += avail - used
+
+    return output[:decodeLen1+decodeLen2], nil
+}
+
+// private
+
 func (f *Base64DecodeFilter) fillTupleBuffer(input []byte) int {
     if f.tupleAvail == 0 {
         return 0
@@ -85,35 +118,4 @@ func (f *Base64DecodeFilter) decodeTupleBuffer() (int, error) {
     }
 
     return decodeLen, err
-}
-
-func (f *Base64DecodeFilter) WriteBytes(input []byte) ([]byte, error) {
-    avail := len(input)
-    output := input
-    write := output
-
-    used := f.fillTupleBuffer(input)
-    decodeLen1, _ := f.decodeTupleBuffer()
-
-    if used == avail {
-        // no more tuples
-        return f.decodeBuff[:decodeLen1], nil
-    }
-
-    if used < decodeLen1 {
-        return nil, fmt.Errorf("unknown error")
-    } else if used >= decodeLen1 && decodeLen1 != 0 {
-        // copy decoded bytes to input buffer
-        copy(write, f.decodeBuff[:decodeLen1])
-        write = write[decodeLen1:]
-    }
-
-    // decode remains tuples
-    decodeLen2, _ := base64.StdEncoding.Decode(write, input[used:])
-    // copy not decoded tuples to tuple buffer
-    used += decodeLen2 * 8 / 6
-    copy(f.tupleBuff[f.tupleAvail:], input[used:])
-    f.tupleAvail += avail - used
-
-    return output[:decodeLen1+decodeLen2], nil
 }

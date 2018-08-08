@@ -38,7 +38,7 @@ func NewXORFilter(mask []byte) *XORFilter {
     return f
 }
 
-// interface ByteWriter
+// interface Filter
 
 func (f *XORFilter) WriteBytes(input []byte) (output []byte, err error) {
     output = input
