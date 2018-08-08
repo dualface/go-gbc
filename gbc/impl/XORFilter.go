@@ -20,29 +20,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package gbc
-
-const (
-    readBufferSize   = 1024 * 4 // 4KB
-    readFailureLimit = 3
-)
+package impl
 
 type (
-    ConnectionConfig struct {
-        ReadBufferSize   int
-        ReadFailureLimit int
-    }
-
-    Connection interface {
-        RawMessageSender
-        ByteWriter
-
-        Start()
-        Close() error
+    XORFilter struct {
+        mask    []byte
+        maskLen int
+        offset  int
     }
 )
 
-var DefaultConnectionConfig = &ConnectionConfig{
-    ReadBufferSize:   readBufferSize,
-    ReadFailureLimit: readFailureLimit,
+func NewXORFilter(mask []byte) *XORFilter {
+    f := &XORFilter{
+        mask:    mask,
+        maskLen: len(mask),
+    }
+    return f
+}
+
+// interface ByteWriter
+
+func (f *XORFilter) WriteBytes(input []byte) (output []byte, err error) {
+    output = input
+    for index, b := range output {
+        output[index] = b ^ f.mask[f.offset]
+        f.offset = (f.offset + 1) % f.maskLen
+    }
+    return
 }

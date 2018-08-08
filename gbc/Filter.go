@@ -22,27 +22,22 @@
 
 package gbc
 
-const (
-    readBufferSize   = 1024 * 4 // 4KB
-    readFailureLimit = 3
-)
-
 type (
-    ConnectionConfig struct {
-        ReadBufferSize   int
-        ReadFailureLimit int
+    Filter interface {
+        ByteWriter
     }
 
-    Connection interface {
-        RawMessageSender
-        ByteWriter
+    FilterAppender interface {
+        Append(f Filter)
+    }
 
-        Start()
-        Close() error
+    Pipeline interface {
+        ByteWriter
+        FilterAppender
+    }
+
+    InputPipeline interface {
+        Pipeline
+        RawMessageSender
     }
 )
-
-var DefaultConnectionConfig = &ConnectionConfig{
-    ReadBufferSize:   readBufferSize,
-    ReadFailureLimit: readFailureLimit,
-}

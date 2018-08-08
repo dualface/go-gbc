@@ -34,11 +34,12 @@ type (
     }
 
     ConnectionGroup interface {
+        ByteWriter
+
         Add(c Connection) error
         Remove(c Connection) error
         RemoveAll()
         CloseAll()
-        Broadcast(b []byte)
     }
 
     ConnectionGroupsMap = map[ConnectionGroup]bool

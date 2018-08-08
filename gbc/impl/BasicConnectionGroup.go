@@ -76,7 +76,7 @@ func (g *BasicConnectionGroup) Add(c gbc.Connection) error {
     g.cmap[c] = true
 
     // forward message from connection
-    c.SetMessageChan(g.mc)
+    c.SetRawMessageReceiver(g.mc)
 
     return nil
 }
@@ -90,7 +90,7 @@ func (g *BasicConnectionGroup) Remove(c gbc.Connection) error {
         return fmt.Errorf("not found connection '%p' in group '%p'", &c, g)
     }
 
-    c.SetMessageChan(nil)
+    c.SetRawMessageReceiver(nil)
 
     delete(g.cmap, c)
     return nil
@@ -103,7 +103,7 @@ func (g *BasicConnectionGroup) RemoveAll() {
     g.mutex.Unlock()
 
     for c := range cmap {
-        c.SetMessageChan(nil)
+        c.SetRawMessageReceiver(nil)
     }
 }
 
@@ -116,7 +116,7 @@ func (g *BasicConnectionGroup) CloseAll() {
     g.cmap = make(connectionsMap, g.conf.PoolInitSize)
 
     for _, c := range clist {
-        c.SetMessageChan(nil)
+        c.SetRawMessageReceiver(nil)
     }
 
     go func() {
@@ -126,15 +126,14 @@ func (g *BasicConnectionGroup) CloseAll() {
     }()
 }
 
-func (g *BasicConnectionGroup) Broadcast(b []byte) {
-    clist := g.makeConnList()
-
-    go func() {
-        // write message to all connections
-        for _, c := range clist {
-            c.Write(b)
-        }
-    }()
+func (g *BasicConnectionGroup) WriteBytes(b []byte) ([]byte, error) {
+    list := g.makeConnList()
+    for _, c := range list {
+        go func() {
+            c.WriteBytes(b)
+        }()
+    }
+    return nil, nil
 }
 
 func (g *BasicConnectionGroup) makeConnList() []gbc.Connection {

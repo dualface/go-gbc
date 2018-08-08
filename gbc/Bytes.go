@@ -22,27 +22,40 @@
 
 package gbc
 
-const (
-    readBufferSize   = 1024 * 4 // 4KB
-    readFailureLimit = 3
+import (
+    "fmt"
+    "strings"
 )
 
 type (
-    ConnectionConfig struct {
-        ReadBufferSize   int
-        ReadFailureLimit int
-    }
-
-    Connection interface {
-        RawMessageSender
-        ByteWriter
-
-        Start()
-        Close() error
+    ByteWriter interface {
+        WriteBytes(input []byte) (output []byte, err error)
     }
 )
 
-var DefaultConnectionConfig = &ConnectionConfig{
-    ReadBufferSize:   readBufferSize,
-    ReadFailureLimit: readFailureLimit,
+func EncodeBytesToString(buf []byte, width int) string {
+    if len(buf) == 0 {
+        return ""
+    }
+
+    sb := &strings.Builder{}
+    nl := false
+
+    for offset, b := range buf {
+        if nl {
+            sb.WriteByte('\n')
+            nl = false
+        }
+        if (offset % width) == 0 {
+            fmt.Fprintf(sb, "0x%02X ", offset)
+        }
+
+        fmt.Fprintf(sb, " %02X", b)
+
+        if (offset % width) == (width - 1) {
+            nl = true
+        }
+    }
+
+    return sb.String()
 }

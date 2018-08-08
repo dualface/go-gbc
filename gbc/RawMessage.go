@@ -28,4 +28,8 @@ type (
         DataBytes() []byte
         GenBytes() []byte
     }
+
+    RawMessageSender interface {
+        SetRawMessageReceiver(c chan RawMessage)
+    }
 )

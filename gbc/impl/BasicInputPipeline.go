@@ -20,46 +20,64 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package impl
 
 import (
-    "fmt"
-    "net"
-    "os"
-
+    "github.com/dualface/go-cli-colorlog"
     "github.com/dualface/go-gbc/gbc"
-    "github.com/dualface/go-gbc/gbc/impl"
 )
 
-const (
-    Host = "localhost"
-    Port = "27010"
+type (
+    BasicInputPipeline struct {
+        filters []gbc.Filter
+        mc      chan gbc.RawMessage
+    }
 )
 
-func main() {
-    addr := fmt.Sprintf("%s:%s", Host, Port)
-    l, err := net.Listen("tcp", addr)
-    if err != nil {
-        exitByErr(err)
+func NewBasicInputPipeline() *BasicInputPipeline {
+    p := &BasicInputPipeline{
+        filters: []gbc.Filter{},
+    }
+    return p
+}
+
+// interface InputPipeline
+
+func (p *BasicInputPipeline) WriteBytes(input []byte) (output []byte, err error) {
+    for _, f := range p.filters {
+        output, err = f.WriteBytes(input)
+
+        if err != nil {
+            clog.PrintWarn("filter '%T' failed, %s", f, err.Error())
+            break
+        }
+        if len(output) == 0 {
+            break
+        }
+
+        input = output
     }
 
-    policy := impl.NewAllInOneConnectionGroupPolicy(nil)
-    cm := impl.NewBasicConnectionManager("testserver", connectHandler, policy)
+    return
+}
 
-    if err := cm.Start(l); err != nil {
-        exitByErr(err)
+func (p *BasicInputPipeline) Append(f gbc.Filter) {
+    p.setupFilter(f)
+    p.filters = append(p.filters, f)
+}
+
+func (p *BasicInputPipeline) SetRawMessageReceiver(c chan gbc.RawMessage) {
+    p.mc = c
+    for _, f := range p.filters {
+        p.setupFilter(f)
     }
 }
 
-func connectHandler(rawConn net.Conn) gbc.Connection {
-    c := impl.NewBasicConnection(rawConn, nil)
-    c.Pipeline.Append(impl.NewBase64DecodeFilter())
-    c.Pipeline.Append(impl.NewXORFilter([]byte{0xff}))
-    c.Pipeline.Append(impl.NewRawMessageInputFilter())
-    return c
-}
+// private
 
-func exitByErr(err error) {
-    fmt.Printf("[ERR] %s\n\n", err)
-    os.Exit(1)
+func (p *BasicInputPipeline) setupFilter(f gbc.Filter) {
+    mr, ok := f.(gbc.RawMessageSender)
+    if ok {
+        mr.SetRawMessageReceiver(p.mc)
+    }
 }

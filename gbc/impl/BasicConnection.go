@@ -32,33 +32,31 @@ import (
 
 type (
     BasicConnection struct {
+        Pipeline gbc.InputPipeline
+
         conn    net.Conn
         conf    *gbc.ConnectionConfig
         running bool
         mc      chan gbc.RawMessage
-        parser  *RawMessageParser
     }
 )
 
-func NewBasicConnection(rawConn net.Conn, conf *gbc.ConnectionConfig) gbc.Connection {
+func NewBasicConnection(rawConn net.Conn, conf *gbc.ConnectionConfig) *BasicConnection {
     if conf == nil {
         conf = gbc.DefaultConnectionConfig
     }
 
     c := &BasicConnection{
-        conn:    rawConn,
-        conf:    conf,
-        running: false,
-        parser:  NewRawMessageParser(),
+        Pipeline: NewBasicInputPipeline(),
+        conn:     rawConn,
+        conf:     conf,
+        running:  false,
     }
+
     return c
 }
 
 // interface Connection
-
-func (c *BasicConnection) SetMessageChan(mc chan gbc.RawMessage) {
-    c.mc = mc
-}
 
 func (c *BasicConnection) Start() {
     if !c.running {
@@ -71,8 +69,14 @@ func (c *BasicConnection) Close() error {
     return c.conn.Close()
 }
 
-func (c *BasicConnection) Write(b []byte) (int, error) {
-    return c.conn.Write(b)
+func (c *BasicConnection) WriteBytes(b []byte) (output []byte, err error) {
+    _, err = c.conn.Write(b)
+    return
+}
+
+func (c *BasicConnection) SetRawMessageReceiver(mc chan gbc.RawMessage) {
+    c.mc = mc
+    c.Pipeline.SetRawMessageReceiver(c.mc)
 }
 
 // private
@@ -104,21 +108,11 @@ func (c *BasicConnection) loop() {
             failure = 0
         }
 
-        for avail > 0 {
-            writeLen, err := c.parser.WriteBytes(buf[offset : offset+avail])
-            avail -= writeLen
-            offset += writeLen
+        if avail > 0 {
+            _, err := c.Pipeline.WriteBytes(buf[offset : offset+avail])
+            offset += avail
             if err != nil {
                 clog.PrintWarn("parsing bytes failed, %s", err)
-            }
-
-            msg := c.parser.FetchMessage()
-            if msg != nil {
-                if c.mc != nil {
-                    c.mc <- msg
-                } else {
-                    clog.PrintWarn("connection discard message")
-                }
             }
         }
 
