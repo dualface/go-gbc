@@ -29,7 +29,7 @@ type (
 
     InputFilter interface {
         Filter
-        RawMessageSender
+        RawMessageChannelSender
     }
 
     Pipeline interface {
@@ -40,6 +40,6 @@ type (
 
     InputPipeline interface {
         Pipeline
-        RawMessageSender
+        RawMessageChannelSender
     }
 )

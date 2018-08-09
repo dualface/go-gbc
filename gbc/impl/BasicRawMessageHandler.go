@@ -32,66 +32,59 @@ import (
 type (
     HandlerFunc func(gbc.RawMessage)
 
-    BasicMessagePipeline struct {
-        Name string
-
+    BasicRawMessageHandler struct {
         state       *BasicState
         quit        chan int
-        inputCh     chan gbc.RawMessage
+        input       chan gbc.RawMessage
+        semaphore   chan int
         wait        sync.WaitGroup
         handlerFunc HandlerFunc
     }
 )
 
-func NewBasicMessagePipeline(name string, inputChSize int, handler HandlerFunc) gbc.MessagePipeline {
-    if inputChSize <= 0 {
+func NewBasicRawMessageHandler(concurrence int, handler HandlerFunc) gbc.RawMessageHandler {
+    if concurrence <= 0 {
         // unbuffered channel
-        inputChSize = 0
+        concurrence = 0
     }
 
-    p := &BasicMessagePipeline{
-        Name:        name,
+    h := &BasicRawMessageHandler{
         state:       NewBasicState(),
         quit:        make(chan int),
-        inputCh:     make(chan gbc.RawMessage, inputChSize),
+        input:       make(chan gbc.RawMessage),
+        semaphore:   make(chan int, concurrence),
         wait:        sync.WaitGroup{},
         handlerFunc: handler,
     }
 
-    return p
+    h.state.To(Starting)
+    go h.loop()
+
+    return h
 }
 
 // interface MessagePipeline
 
-func (p *BasicMessagePipeline) Start() (err error) {
-    err = p.state.To(Starting)
-    if err == nil {
-        go p.loop()
-    }
-    return
-}
-
-func (p *BasicMessagePipeline) Stop() {
-    if p.state.To(Stopping) == nil {
-        p.quit <- 1
+func (h *BasicRawMessageHandler) Stop() {
+    if h.state.To(Stopping) {
+        h.quit <- 1
     }
 }
 
-func (p *BasicMessagePipeline) WaitForComplete() {
-    if p.state.To(Idle) == nil {
-        p.wait.Wait()
+func (h *BasicRawMessageHandler) WaitForComplete() {
+    if h.state.To(Idle) {
+        h.wait.Wait()
     }
 }
 
-func (p *BasicMessagePipeline) OnMessage(m gbc.RawMessage) error {
-    if p.state.Current() == Running {
-        return p.makeErr("can not handling message")
+func (h *BasicRawMessageHandler) WriteRawMessage(m gbc.RawMessage) error {
+    if h.state.Current() != Running {
+        return fmt.Errorf("'%T' current is not running", h)
     }
 
-    // avoid blocking Pipeline
+    // avoid blocking caller
     go func() {
-        // goroutine will be blocking, if channel buffer is full
-        p.inputCh <- m
+        h.input <- m
     }()
 
     return nil
@@ -99,29 +92,27 @@ func (p *BasicMessagePipeline) OnMessage(m gbc.RawMessage) error {
 
 // private
 
-func (p *BasicMessagePipeline) loop() {
-    if p.state.To(Running) != nil {
+func (h *BasicRawMessageHandler) loop() {
+    if !h.state.To(Running) {
         return
     }
 
 loop:
     for {
         select {
-        case msg := <-p.inputCh:
-            p.wait.Add(1)
+        case msg := <-h.input:
+            h.wait.Add(1)
             go func() {
-                p.handlerFunc(msg)
-                p.wait.Done()
+                h.semaphore <- 1
+                h.handlerFunc(msg)
+                h.wait.Done()
+                <-h.semaphore
             }()
-        case <-p.quit:
+        case <-h.quit:
             break loop
         }
     }
 
-    p.wait.Wait()
-    p.state.To(Idle)
-}
-
-func (p *BasicMessagePipeline) makeErr(msg string) error {
-    return fmt.Errorf("[%s][%s], %s", p.Name, p.state, msg)
+    h.wait.Wait()
+    h.state.To(Idle)
 }

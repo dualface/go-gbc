@@ -20,4 +20,57 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package gbc
+package impl
+
+import (
+    "sync"
+
+    "github.com/dualface/go-gbc/gbc"
+)
+
+type (
+    BasicRawMessagePipeline struct {
+        handlers []gbc.RawMessageHandler
+    }
+)
+
+func NewBasicRawMessagePipeline() *BasicRawMessagePipeline {
+    p := &BasicRawMessagePipeline{
+        handlers: []gbc.RawMessageHandler{},
+    }
+    return p
+}
+
+// interface RawMessagePipeline
+
+func (p *BasicRawMessagePipeline) WriteRawMessage(m gbc.RawMessage) (err error) {
+    for _, h := range p.handlers {
+        err = h.WriteRawMessage(m)
+        if err != nil {
+            break
+        }
+    }
+    return
+}
+
+func (p *BasicRawMessagePipeline) Stop() {
+    for _, h := range p.handlers {
+        h.Stop()
+    }
+}
+
+func (p *BasicRawMessagePipeline) WaitForComplete() {
+    wait := sync.WaitGroup{}
+    for _, h := range p.handlers {
+        wait.Add(1)
+        go func() {
+            h.WaitForComplete()
+            wait.Done()
+        }()
+    }
+    wait.Wait()
+}
+
+func (p *BasicRawMessagePipeline) Append(h gbc.RawMessageHandler) {
+    p.handlers = append(p.handlers, h)
+}

@@ -32,10 +32,11 @@ type (
     }
 )
 
-func NewAllInOneConnectionGroupPolicy(conf *gbc.ConnectionGroupConfig) gbc.ConnectionGroupPolicy {
+func NewAllInOneConnectionGroupPolicy(conf *gbc.ConnectionGroupConfig, handler gbc.RawMessageHandler) gbc.ConnectionGroupPolicy {
     p := &AllInOneConnectionGroupPolicy{
         group: NewBasicConnectionGroup(conf),
     }
+    p.group.SetRawMessageHandler(handler)
     return p
 }
 

@@ -29,7 +29,32 @@ type (
         GenBytes() []byte
     }
 
-    RawMessageSender interface {
+    RawMessageChannelSender interface {
         SetRawMessageReceiver(c chan RawMessage)
+    }
+
+    RawMessageHandlerSender interface {
+        SetRawMessageHandler(h RawMessageHandler)
+    }
+
+    RawMessageWriter interface {
+        WriteRawMessage(m RawMessage) error
+    }
+
+    RawMessageController interface {
+        Stop()
+        WaitForComplete()
+    }
+
+    RawMessageHandler interface {
+        RawMessageWriter
+        RawMessageController
+    }
+
+    RawMessagePipeline interface {
+        RawMessageWriter
+        RawMessageController
+
+        Append(h RawMessageHandler)
     }
 )

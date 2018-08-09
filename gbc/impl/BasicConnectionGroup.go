@@ -26,7 +26,6 @@ import (
     "fmt"
     "sync"
 
-    "github.com/dualface/go-cli-colorlog"
     "github.com/dualface/go-gbc/gbc"
 )
 
@@ -34,12 +33,13 @@ type (
     connectionsMap = map[gbc.Connection]bool
 
     BasicConnectionGroup struct {
-        conf    *gbc.ConnectionGroupConfig
-        cmap    connectionsMap
-        mc      chan gbc.RawMessage
-        cc      chan string
-        running bool
-        mutex   *sync.Mutex
+        conf        *gbc.ConnectionGroupConfig
+        connections connectionsMap
+        handler     gbc.RawMessageHandler
+        mc          chan gbc.RawMessage
+        cc          chan string
+        running     bool
+        mutex       *sync.Mutex
     }
 
     ConnectionGroupsMap = map[*BasicConnectionGroup]bool
@@ -50,12 +50,12 @@ func NewBasicConnectionGroup(conf *gbc.ConnectionGroupConfig) gbc.ConnectionGrou
         conf = gbc.DefaultConnectionGroupConfig
     }
     g := &BasicConnectionGroup{
-        conf:    conf,
-        cmap:    make(connectionsMap, conf.PoolInitSize),
-        mc:      make(chan gbc.RawMessage, conf.MessageQueueInitSize),
-        cc:      make(chan string),
-        running: true,
-        mutex:   &sync.Mutex{},
+        conf:        conf,
+        connections: make(connectionsMap, conf.PoolInitSize),
+        mc:          make(chan gbc.RawMessage, conf.MessageQueueInitSize),
+        cc:          make(chan string),
+        running:     true,
+        mutex:       &sync.Mutex{},
     }
 
     go g.loop()
@@ -69,11 +69,11 @@ func (g *BasicConnectionGroup) Add(c gbc.Connection) error {
     g.mutex.Lock()
     defer g.mutex.Unlock()
 
-    _, ok := g.cmap[c]
+    _, ok := g.connections[c]
     if ok {
         return fmt.Errorf("connection '%p' already exists in group '%p'", &c, g)
     }
-    g.cmap[c] = true
+    g.connections[c] = true
 
     // forward message from connection
     c.SetRawMessageReceiver(g.mc)
@@ -85,24 +85,24 @@ func (g *BasicConnectionGroup) Remove(c gbc.Connection) error {
     g.mutex.Lock()
     defer g.mutex.Unlock()
 
-    _, ok := g.cmap[c]
+    _, ok := g.connections[c]
     if !ok {
         return fmt.Errorf("not found connection '%p' in group '%p'", &c, g)
     }
 
     c.SetRawMessageReceiver(nil)
 
-    delete(g.cmap, c)
+    delete(g.connections, c)
     return nil
 }
 
 func (g *BasicConnectionGroup) RemoveAll() {
     g.mutex.Lock()
-    cmap := g.cmap
-    g.cmap = make(connectionsMap, g.conf.PoolInitSize)
+    m := g.connections
+    g.connections = make(connectionsMap, g.conf.PoolInitSize)
     g.mutex.Unlock()
 
-    for c := range cmap {
+    for c := range m {
         c.SetRawMessageReceiver(nil)
     }
 }
@@ -112,22 +112,24 @@ func (g *BasicConnectionGroup) CloseAll() {
         g.cc <- "stop"
     }
 
-    clist := g.makeConnList()
-    g.cmap = make(connectionsMap, g.conf.PoolInitSize)
+    list := g.makeTempConnList()
+    g.connections = make(connectionsMap, g.conf.PoolInitSize)
 
-    for _, c := range clist {
+    for _, c := range list {
         c.SetRawMessageReceiver(nil)
     }
 
     go func() {
-        for _, c := range clist {
+        for _, c := range list {
             c.Close()
         }
     }()
 }
 
+// broadcast to all list
 func (g *BasicConnectionGroup) WriteBytes(b []byte) ([]byte, error) {
-    list := g.makeConnList()
+    list := g.makeTempConnList()
+
     for _, c := range list {
         go func() {
             c.WriteBytes(b)
@@ -136,12 +138,18 @@ func (g *BasicConnectionGroup) WriteBytes(b []byte) ([]byte, error) {
     return nil, nil
 }
 
-func (g *BasicConnectionGroup) makeConnList() []gbc.Connection {
+func (g *BasicConnectionGroup) SetRawMessageHandler(h gbc.RawMessageHandler) {
+    g.handler = h
+}
+
+// private
+
+func (g *BasicConnectionGroup) makeTempConnList() []gbc.Connection {
     g.mutex.Lock()
     // copy connections to tmp array
-    clist := make([]gbc.Connection, len(g.cmap))
+    clist := make([]gbc.Connection, len(g.connections))
     i := 0
-    for c := range g.cmap {
+    for c := range g.connections {
         clist[i] = c
         i++
     }
@@ -150,15 +158,15 @@ func (g *BasicConnectionGroup) makeConnList() []gbc.Connection {
     return clist
 }
 
-// private
-
 func (g *BasicConnectionGroup) loop() {
 
 loop:
     for {
         select {
-        case msg := <-g.mc:
-            clog.PrintDebug("%s", msg)
+        case m := <-g.mc:
+            if g.handler != nil {
+                g.handler.WriteRawMessage(m)
+            }
 
         case c := <-g.cc:
             if c == "stop" {

@@ -24,8 +24,10 @@ package main
 
 import (
     "fmt"
+    "math/rand"
     "net"
     "os"
+    "time"
 
     "github.com/dualface/go-gbc/gbc"
     "github.com/dualface/go-gbc/gbc/impl"
@@ -37,17 +39,20 @@ const (
 )
 
 func main() {
+    rand.Seed(time.Now().Unix())
+
     addr := fmt.Sprintf("%s:%s", Host, Port)
     l, err := net.Listen("tcp", addr)
-    if err != nil {
-        exitByErr(err)
+    if err == nil {
+        handler := impl.NewBasicRawMessageHandler(3, rawMessageHandler)
+        policy := impl.NewAllInOneConnectionGroupPolicy(nil, handler)
+        cm := impl.NewBasicConnectionManager(connectHandler, policy)
+        err = cm.Start(l)
     }
 
-    policy := impl.NewAllInOneConnectionGroupPolicy(nil)
-    cm := impl.NewBasicConnectionManager("testserver", connectHandler, policy)
-
-    if err := cm.Start(l); err != nil {
-        exitByErr(err)
+    if err != nil {
+        fmt.Printf("[ERR] %s\n\n", err)
+        os.Exit(1)
     }
 }
 
@@ -59,7 +64,7 @@ func connectHandler(rawConn net.Conn) gbc.Connection {
     return c
 }
 
-func exitByErr(err error) {
-    fmt.Printf("[ERR] %s\n\n", err)
-    os.Exit(1)
+func rawMessageHandler(m gbc.RawMessage) {
+    fmt.Printf("%+v\n", m)
+    time.Sleep(time.Second * time.Duration(rand.Intn(3)+1))
 }

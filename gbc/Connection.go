@@ -34,7 +34,7 @@ type (
     }
 
     Connection interface {
-        RawMessageSender
+        RawMessageChannelSender
         ByteWriter
 
         Start()

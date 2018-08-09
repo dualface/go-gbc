@@ -35,7 +35,6 @@ import (
 
 type (
     BasicConnectionManager struct {
-        name   string
         ch     gbc.OnConnectHandler
         policy gbc.ConnectionGroupPolicy
         groups gbc.ConnectionGroupsMap
@@ -44,15 +43,14 @@ type (
     }
 )
 
-func NewBasicConnectionManager(name string, handler gbc.OnConnectHandler, policy gbc.ConnectionGroupPolicy) gbc.ConnectionManager {
+func NewBasicConnectionManager(handler gbc.OnConnectHandler, policy gbc.ConnectionGroupPolicy) gbc.ConnectionManager {
     if handler == nil {
         handler = defaultOnConnectHandler
     }
     if policy == nil {
-        policy = NewAllInOneConnectionGroupPolicy(nil)
+        policy = NewAllInOneConnectionGroupPolicy(nil, nil)
     }
     cm := &BasicConnectionManager{
-        name:   name,
         ch:     handler,
         policy: policy,
         groups: make(gbc.ConnectionGroupsMap),
@@ -66,7 +64,7 @@ func NewBasicConnectionManager(name string, handler gbc.OnConnectHandler, policy
 // interface ConnectionManager
 
 func (cm *BasicConnectionManager) Start(l net.Listener) (err error) {
-    clog.PrintInfo("[%s] listening at: %s", cm.name, l.Addr().String())
+    clog.PrintInfo("listening at: %s", l.Addr().String())
 
     // handle CTRL+C
     signCh := make(chan os.Signal)
@@ -74,7 +72,7 @@ func (cm *BasicConnectionManager) Start(l net.Listener) (err error) {
     go func() {
         <-signCh
         // sig is a ^C, handle it
-        clog.PrintInfo("[%s] signal os.Interrupt captured", cm.name)
+        clog.PrintInfo("signal os.Interrupt captured")
         cm.cc <- "stop"
     }()
 
@@ -86,8 +84,6 @@ loop:
     for {
         select {
         case cmd := <-cm.cc:
-            cmd = strings.ToLower(cmd)
-            clog.PrintInfo("[%s] get command '%s'", cm.name, cmd)
             if cmd == "stop" {
                 break loop
             }
@@ -102,7 +98,7 @@ loop:
         group.CloseAll()
     }
 
-    clog.PrintInfo("[%s] shutdown", cm.name)
+    clog.PrintInfo("shutdown")
     return
 }
 

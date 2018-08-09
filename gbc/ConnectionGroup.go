@@ -35,6 +35,7 @@ type (
 
     ConnectionGroup interface {
         ByteWriter
+        RawMessageHandlerSender
 
         Add(c Connection) error
         Remove(c Connection) error

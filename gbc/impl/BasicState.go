@@ -22,10 +22,6 @@
 
 package impl
 
-import (
-    "fmt"
-)
-
 type State string
 
 const (
@@ -55,17 +51,18 @@ func (s *BasicState) Current() State {
     return s.state
 }
 
-func (s *BasicState) To(next State) (err error) {
+func (s *BasicState) To(next State) bool {
     for i, state := range s.seq {
         if state != s.state {
             continue
         }
 
         if s.seq[i+1] != next {
-            err = fmt.Errorf("current state is not '%s', can not '%s'", s.state, next)
-            return
+            return false
         }
+
+        break
     }
     s.state = next
-    return nil
+    return true
 }
