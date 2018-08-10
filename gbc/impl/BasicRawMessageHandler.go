@@ -23,96 +23,39 @@
 package impl
 
 import (
-    "fmt"
-    "sync"
-
     "github.com/dualface/go-gbc/gbc"
 )
 
 type (
     HandlerFunc func(gbc.RawMessage)
 
-    BasicRawMessageHandler struct {
-        state       *BasicState
-        quit        chan int
-        input       chan gbc.RawMessage
+    ConcurrenceRawMessageReceiver struct {
         semaphore   chan int
-        wait        sync.WaitGroup
         handlerFunc HandlerFunc
     }
 )
 
-func NewBasicRawMessageHandler(concurrence int, handler HandlerFunc) gbc.RawMessageHandler {
-    if concurrence <= 0 {
-        // unbuffered channel
-        concurrence = 0
+func NewConcurrenceRawMessageReceiver(concurrence int, handler HandlerFunc) *ConcurrenceRawMessageReceiver {
+    if concurrence <= 1 {
+        concurrence = 1
     }
 
-    h := &BasicRawMessageHandler{
-        state:       NewBasicState(),
-        quit:        make(chan int),
-        input:       make(chan gbc.RawMessage),
+    r := &ConcurrenceRawMessageReceiver{
         semaphore:   make(chan int, concurrence),
-        wait:        sync.WaitGroup{},
         handlerFunc: handler,
     }
 
-    h.state.To(Starting)
-    go h.loop()
-
-    return h
+    return r
 }
 
 // interface MessagePipeline
 
-func (h *BasicRawMessageHandler) Stop() {
-    if h.state.To(Stopping) {
-        h.quit <- 1
-    }
-}
-
-func (h *BasicRawMessageHandler) WaitForComplete() {
-    if h.state.To(Idle) {
-        h.wait.Wait()
-    }
-}
-
-func (h *BasicRawMessageHandler) WriteRawMessage(m gbc.RawMessage) error {
-    if h.state.Current() != Running {
-        return fmt.Errorf("'%T' current is not running", h)
-    }
-
+func (r *ConcurrenceRawMessageReceiver) OnReceiveRawMessage(m gbc.RawMessage) error {
     // avoid blocking caller
     go func() {
-        h.input <- m
+        r.semaphore <- 1
+        r.handlerFunc(m)
+        <-r.semaphore
     }()
-
     return nil
-}
-
-// private
-
-func (h *BasicRawMessageHandler) loop() {
-    if !h.state.To(Running) {
-        return
-    }
-
-loop:
-    for {
-        select {
-        case msg := <-h.input:
-            h.wait.Add(1)
-            go func() {
-                h.semaphore <- 1
-                h.handlerFunc(msg)
-                h.wait.Done()
-                <-h.semaphore
-            }()
-        case <-h.quit:
-            break loop
-        }
-    }
-
-    h.wait.Wait()
-    h.state.To(Idle)
 }

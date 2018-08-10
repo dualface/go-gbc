@@ -23,38 +23,45 @@
 package gbc
 
 type (
+    FilterByteWriter interface {
+        // write bytes to filter, return pointer of new buffer
+        WriteBytes(input []byte) (output []byte, err error)
+    }
+
+    FilterRawMessageChannel interface {
+        SetRawMessageChannel(chan RawMessage)
+    }
+
+    Filter interface {
+        FilterByteWriter
+    }
+
+    InputFilter interface {
+        Filter
+        FilterRawMessageChannel
+    }
+
+    OutputFilter interface {
+        Filter
+    }
+
+    Pipeline interface {
+        FilterByteWriter
+        Append(f Filter)
+    }
+
+    InputPipeline interface {
+        Pipeline
+        FilterRawMessageChannel
+    }
+
+    OutputPipeline interface {
+        Pipeline
+    }
+
     RawMessage interface {
         DataType() int
         DataBytes() []byte
         GenBytes() []byte
-    }
-
-    RawMessageChannelSender interface {
-        SetRawMessageReceiver(c chan RawMessage)
-    }
-
-    RawMessageHandlerSender interface {
-        SetRawMessageHandler(h RawMessageHandler)
-    }
-
-    RawMessageWriter interface {
-        WriteRawMessage(m RawMessage) error
-    }
-
-    RawMessageController interface {
-        Stop()
-        WaitForComplete()
-    }
-
-    RawMessageHandler interface {
-        RawMessageWriter
-        RawMessageController
-    }
-
-    RawMessagePipeline interface {
-        RawMessageWriter
-        RawMessageController
-
-        Append(h RawMessageHandler)
     }
 )

@@ -29,41 +29,75 @@ import (
     "github.com/dualface/go-gbc/gbc"
 )
 
+const (
+    connectionPoolSize = 10000
+)
+
 type (
     connectionsMap = map[gbc.Connection]bool
 
     BasicConnectionGroup struct {
-        conf        *gbc.ConnectionGroupConfig
-        connections connectionsMap
-        handler     gbc.RawMessageHandler
-        mc          chan gbc.RawMessage
-        cc          chan string
-        running     bool
-        mutex       *sync.Mutex
+        Name string
+
+        onRawMessageFunc gbc.OnRawMessageFunc
+        connections      connectionsMap
+        messageChan      chan gbc.RawMessage
+        quit             chan int
+        running          bool
+        mutex            *sync.Mutex
     }
 
     ConnectionGroupsMap = map[*BasicConnectionGroup]bool
 )
 
-func NewBasicConnectionGroup(conf *gbc.ConnectionGroupConfig) gbc.ConnectionGroup {
-    if conf == nil {
-        conf = gbc.DefaultConnectionGroupConfig
-    }
+func NewBasicConnectionGroup(name string, messageFunc gbc.OnRawMessageFunc) *BasicConnectionGroup {
     g := &BasicConnectionGroup{
-        conf:        conf,
-        connections: make(connectionsMap, conf.PoolInitSize),
-        mc:          make(chan gbc.RawMessage, conf.MessageQueueInitSize),
-        cc:          make(chan string),
-        running:     true,
-        mutex:       &sync.Mutex{},
+        Name:             name,
+        onRawMessageFunc: messageFunc,
+        connections:      make(connectionsMap, connectionPoolSize),
+        messageChan:      make(chan gbc.RawMessage),
+        quit:             make(chan int),
+        running:          false,
+        mutex:            &sync.Mutex{},
     }
-
-    go g.loop()
 
     return g
 }
 
 // interface ConnectionGroup
+
+func (g *BasicConnectionGroup) OnRawMessage(f gbc.OnRawMessageFunc) {
+    g.onRawMessageFunc = f
+}
+
+func (g *BasicConnectionGroup) Start() error {
+    if g.running {
+        return fmt.Errorf("connection '%s' group is already running", g.Name)
+    }
+
+    g.running = true
+    go g.loop()
+    return nil
+}
+
+func (g *BasicConnectionGroup) Close() error {
+    if !g.running {
+        return fmt.Errorf("connection '%s' group is not running", g.Name)
+    }
+
+    g.quit <- 1
+
+    // stop all connections
+    g.mutex.Lock()
+    defer g.mutex.Unlock()
+
+    for c := range g.connections {
+        c.Close()
+    }
+    g.connections = make(connectionsMap, connectionPoolSize)
+
+    return nil
+}
 
 func (g *BasicConnectionGroup) Add(c gbc.Connection) error {
     g.mutex.Lock()
@@ -74,9 +108,7 @@ func (g *BasicConnectionGroup) Add(c gbc.Connection) error {
         return fmt.Errorf("connection '%p' already exists in group '%p'", &c, g)
     }
     g.connections[c] = true
-
-    // forward message from connection
-    c.SetRawMessageReceiver(g.mc)
+    c.SetMessageChannel(g.messageChan)
 
     return nil
 }
@@ -90,88 +122,47 @@ func (g *BasicConnectionGroup) Remove(c gbc.Connection) error {
         return fmt.Errorf("not found connection '%p' in group '%p'", &c, g)
     }
 
-    c.SetRawMessageReceiver(nil)
-
+    c.SetMessageChannel(nil)
     delete(g.connections, c)
     return nil
 }
 
-func (g *BasicConnectionGroup) RemoveAll() {
+func (g *BasicConnectionGroup) MessageChan() chan gbc.RawMessage {
+    return g.messageChan
+}
+
+func (g *BasicConnectionGroup) BroadcastWrite(b []byte) {
     g.mutex.Lock()
-    m := g.connections
-    g.connections = make(connectionsMap, g.conf.PoolInitSize)
-    g.mutex.Unlock()
-
-    for c := range m {
-        c.SetRawMessageReceiver(nil)
-    }
-}
-
-func (g *BasicConnectionGroup) CloseAll() {
-    if g.running {
-        g.cc <- "stop"
-    }
-
-    list := g.makeTempConnList()
-    g.connections = make(connectionsMap, g.conf.PoolInitSize)
-
-    for _, c := range list {
-        c.SetRawMessageReceiver(nil)
-    }
-
-    go func() {
-        for _, c := range list {
-            c.Close()
-        }
-    }()
-}
-
-// broadcast to all list
-func (g *BasicConnectionGroup) WriteBytes(b []byte) ([]byte, error) {
-    list := g.makeTempConnList()
-
-    for _, c := range list {
-        go func() {
-            c.WriteBytes(b)
-        }()
-    }
-    return nil, nil
-}
-
-func (g *BasicConnectionGroup) SetRawMessageHandler(h gbc.RawMessageHandler) {
-    g.handler = h
-}
-
-// private
-
-func (g *BasicConnectionGroup) makeTempConnList() []gbc.Connection {
-    g.mutex.Lock()
-    // copy connections to tmp array
-    clist := make([]gbc.Connection, len(g.connections))
+    list := make([]gbc.Connection, len(g.connections))
     i := 0
     for c := range g.connections {
-        clist[i] = c
+        list[i] = c
         i++
     }
     g.mutex.Unlock()
 
-    return clist
+    for _, c := range list {
+        c := c
+        go func() {
+            c.Write(b)
+        }()
+    }
 }
+
+// private
 
 func (g *BasicConnectionGroup) loop() {
 
 loop:
     for {
         select {
-        case m := <-g.mc:
-            if g.handler != nil {
-                g.handler.WriteRawMessage(m)
+        case m := <-g.messageChan:
+            if g.onRawMessageFunc != nil {
+                g.onRawMessageFunc(m)
             }
 
-        case c := <-g.cc:
-            if c == "stop" {
-                break loop
-            }
+        case <-g.quit:
+            break loop
         }
     }
 

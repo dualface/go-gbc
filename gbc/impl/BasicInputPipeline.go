@@ -29,8 +29,9 @@ import (
 
 type (
     BasicInputPipeline struct {
+        MessageChan chan gbc.RawMessage
+
         filters []gbc.Filter
-        mc      chan gbc.RawMessage
     }
 )
 
@@ -41,7 +42,7 @@ func NewBasicInputPipeline() *BasicInputPipeline {
     return p
 }
 
-// interface InputPipeline
+// interface InputFilter
 
 func (p *BasicInputPipeline) WriteBytes(input []byte) (output []byte, err error) {
     for _, f := range p.filters {
@@ -51,6 +52,7 @@ func (p *BasicInputPipeline) WriteBytes(input []byte) (output []byte, err error)
             clog.PrintWarn("filter '%T' failed, %s", f, err.Error())
             break
         }
+
         if len(output) == 0 {
             break
         }
@@ -62,22 +64,22 @@ func (p *BasicInputPipeline) WriteBytes(input []byte) (output []byte, err error)
 }
 
 func (p *BasicInputPipeline) Append(f gbc.Filter) {
-    p.setupFilter(f)
     p.filters = append(p.filters, f)
+    setFilterRawMessageChannel(f, p.MessageChan)
 }
 
-func (p *BasicInputPipeline) SetRawMessageReceiver(c chan gbc.RawMessage) {
-    p.mc = c
+func (p *BasicInputPipeline) SetRawMessageChannel(mc chan gbc.RawMessage) {
+    p.MessageChan = mc
     for _, f := range p.filters {
-        p.setupFilter(f)
+        setFilterRawMessageChannel(f, mc)
     }
 }
 
 // private
 
-func (p *BasicInputPipeline) setupFilter(f gbc.Filter) {
-    mr, ok := f.(gbc.RawMessageChannelSender)
+func setFilterRawMessageChannel(f gbc.Filter, mc chan gbc.RawMessage) {
+    setter, ok := f.(gbc.FilterRawMessageChannel)
     if ok {
-        mr.SetRawMessageReceiver(p.mc)
+        setter.SetRawMessageChannel(mc)
     }
 }

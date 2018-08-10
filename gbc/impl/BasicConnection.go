@@ -30,53 +30,69 @@ import (
     "github.com/dualface/go-gbc/gbc"
 )
 
+const (
+    readBufferSize   = 1024 * 4 // 4KB
+    readFailureLimit = 3
+)
+
 type (
     BasicConnection struct {
-        Pipeline gbc.InputPipeline
-
-        conn    net.Conn
-        conf    *gbc.ConnectionConfig
-        running bool
-        mc      chan gbc.RawMessage
+        RawConn      net.Conn
+        InputFilter  gbc.InputFilter
+        OutputFilter gbc.OutputFilter
+        MessageChan  chan gbc.RawMessage
     }
 )
 
-func NewBasicConnection(rawConn net.Conn, conf *gbc.ConnectionConfig) *BasicConnection {
-    if conf == nil {
-        conf = gbc.DefaultConnectionConfig
+func NewBasicConnection(rawConn net.Conn, i gbc.InputFilter) *BasicConnection {
+    conn := &BasicConnection{
+        RawConn:     rawConn,
+        InputFilter: i,
     }
-
-    c := &BasicConnection{
-        Pipeline: NewBasicInputPipeline(),
-        conn:     rawConn,
-        conf:     conf,
-        running:  false,
-    }
-
-    return c
+    return conn
 }
 
 // interface Connection
 
-func (c *BasicConnection) Start() {
-    if !c.running {
-        c.running = true
-        go c.loop()
+func (c *BasicConnection) Start() error {
+    if c.InputFilter == nil {
+        clog.PrintWarn("connection '%s' not set input filter", c.RawConn.RemoteAddr().String())
+    } else {
+        c.InputFilter.SetRawMessageChannel(c.MessageChan)
     }
+
+    if c.MessageChan == nil {
+        clog.PrintWarn("connection '%s' not set raw message chan", c.RawConn.RemoteAddr().String())
+    }
+
+    go c.loop()
+    return nil
 }
 
 func (c *BasicConnection) Close() error {
-    return c.conn.Close()
+    c.InputFilter = nil
+    c.OutputFilter = nil
+    c.MessageChan = nil
+    return c.RawConn.Close()
 }
 
-func (c *BasicConnection) WriteBytes(b []byte) (output []byte, err error) {
-    _, err = c.conn.Write(b)
+func (c *BasicConnection) Write(b []byte) (writeLen int, err error) {
+    var output []byte
+    if c.OutputFilter != nil {
+        output, err = c.OutputFilter.WriteBytes(b)
+        if err != nil {
+            return
+        }
+        writeLen, err = c.RawConn.Write(output)
+    }
     return
 }
 
-func (c *BasicConnection) SetRawMessageReceiver(mc chan gbc.RawMessage) {
-    c.mc = mc
-    c.Pipeline.SetRawMessageReceiver(c.mc)
+func (c *BasicConnection) SetMessageChannel(mc chan gbc.RawMessage) {
+    c.MessageChan = mc
+    if c.InputFilter != nil {
+        c.InputFilter.SetRawMessageChannel(mc)
+    }
 }
 
 // private
@@ -84,20 +100,20 @@ func (c *BasicConnection) SetRawMessageReceiver(mc chan gbc.RawMessage) {
 func (c *BasicConnection) loop() {
     failure := 0
     // use double buffer
-    halfBufSize := c.conf.ReadBufferSize
+    halfBufSize := readBufferSize
     buf := make([]byte, halfBufSize*2, halfBufSize*2)
     offset := 0
 
     for {
-        if failure >= c.conf.ReadFailureLimit {
+        if failure >= readFailureLimit {
             // stop read
             break
         }
 
-        avail, err := c.conn.Read(buf[offset : offset+halfBufSize])
+        avail, err := c.RawConn.Read(buf[offset : offset+halfBufSize])
         if err != nil {
             if err != io.EOF {
-                clog.PrintWarn("reading failed on %s, %s", c.conn.RemoteAddr(), err)
+                clog.PrintWarn("reading failed on %s, %s", c.RawConn.RemoteAddr(), err)
                 failure++
                 continue // try again
             } else if avail == 0 {
@@ -108,12 +124,13 @@ func (c *BasicConnection) loop() {
             failure = 0
         }
 
-        if avail > 0 {
-            _, err := c.Pipeline.WriteBytes(buf[offset : offset+avail])
-            offset += avail
+        if avail > 0 && c.InputFilter != nil {
+            _, err := c.InputFilter.WriteBytes(buf[offset : offset+avail])
             if err != nil {
                 clog.PrintWarn("parsing bytes failed, %s", err)
             }
+
+            offset += avail
         }
 
         if offset >= halfBufSize {

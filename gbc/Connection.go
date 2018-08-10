@@ -22,27 +22,62 @@
 
 package gbc
 
-const (
-    readBufferSize   = 1024 * 4 // 4KB
-    readFailureLimit = 3
+import (
+    "net"
 )
 
 type (
-    ConnectionConfig struct {
-        ReadBufferSize   int
-        ReadFailureLimit int
+    Connection interface {
+        // start reading data from connection
+        Start() error
+
+        // close the connection
+        Close() error
+
+        // write bytes to connection
+        Write([]byte) (int, error)
+
+        // all received message from connection will forward to this channel
+        SetMessageChannel(chan RawMessage)
     }
 
-    Connection interface {
-        RawMessageChannelSender
-        ByteWriter
+    // when new rawMessage fetched, call this function
+    OnRawMessageFunc func(m RawMessage) error
 
-        Start()
+    ConnectionGroup interface {
+        // set handler function for incoming rawMessage
+        OnRawMessage(OnRawMessageFunc)
+
+        // start message loop
+        Start() error
+
+        // close all connections in group
         Close() error
+
+        // add connection to group
+        Add(c Connection) error
+
+        // remove connection from group
+        Remove(c Connection) error
+
+        // get message channel for group
+        MessageChan() chan RawMessage
+
+        // write bytes to all connections in group
+        BroadcastWrite([]byte)
+    }
+
+    // when new connection accepted, call this function
+    OnConnectFunc func(net.Conn) Connection
+
+    ConnectionManager interface {
+        // set handler function for incoming connect
+        OnConnect(OnConnectFunc)
+
+        // start accepting new connections
+        Start(l net.Listener) error
+
+        // stop network server
+        Stop()
     }
 )
-
-var DefaultConnectionConfig = &ConnectionConfig{
-    ReadBufferSize:   readBufferSize,
-    ReadFailureLimit: readFailureLimit,
-}

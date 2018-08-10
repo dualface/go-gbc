@@ -28,9 +28,10 @@ import (
 
 type (
     RawMessageInputFilter struct {
+        MessageChan chan gbc.RawMessage
+
         headerBuf    []byte
         headerOffset int
-        mc           chan gbc.RawMessage
         msg          *RawMessageImpl
     }
 )
@@ -92,7 +93,9 @@ func (f *RawMessageInputFilter) WriteBytes(input []byte) (output []byte, err err
 
         // if get a message, send it
         if f.msg.RemainsBytes() == 0 {
-            f.mc <- f.msg
+            if f.MessageChan != nil {
+                f.MessageChan <- f.msg
+            }
             f.msg = nil
         }
     }
@@ -100,6 +103,6 @@ func (f *RawMessageInputFilter) WriteBytes(input []byte) (output []byte, err err
     return
 }
 
-func (f *RawMessageInputFilter) SetRawMessageReceiver(c chan gbc.RawMessage) {
-    f.mc = c
+func (f *RawMessageInputFilter) SetRawMessageChannel(mc chan gbc.RawMessage) {
+    f.MessageChan = mc
 }

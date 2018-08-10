@@ -22,31 +22,34 @@
 
 package gbc
 
-const (
-    poolInitSize         = 10000
-    messageQueueInitSize = 100000
+import (
+    "fmt"
+    "strings"
 )
 
-type (
-    ConnectionGroupConfig struct {
-        PoolInitSize         int
-        MessageQueueInitSize int
+func EncodeBytesToString(buf []byte, width int) string {
+    if len(buf) == 0 {
+        return ""
     }
 
-    ConnectionGroup interface {
-        ByteWriter
-        RawMessageHandlerSender
+    sb := &strings.Builder{}
+    nl := false
 
-        Add(c Connection) error
-        Remove(c Connection) error
-        RemoveAll()
-        CloseAll()
+    for offset, b := range buf {
+        if nl {
+            sb.WriteByte('\n')
+            nl = false
+        }
+        if (offset % width) == 0 {
+            fmt.Fprintf(sb, "0x%02X ", offset)
+        }
+
+        fmt.Fprintf(sb, " %02X", b)
+
+        if (offset % width) == (width - 1) {
+            nl = true
+        }
     }
 
-    ConnectionGroupsMap = map[ConnectionGroup]bool
-)
-
-var DefaultConnectionGroupConfig = &ConnectionGroupConfig{
-    PoolInitSize:         poolInitSize,
-    MessageQueueInitSize: messageQueueInitSize,
+    return sb.String()
 }

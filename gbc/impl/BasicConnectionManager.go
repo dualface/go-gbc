@@ -24,8 +24,6 @@ package impl
 
 import (
     "net"
-    "os"
-    "os/signal"
     "strings"
     "sync"
 
@@ -35,71 +33,67 @@ import (
 
 type (
     BasicConnectionManager struct {
-        ch     gbc.OnConnectHandler
-        policy gbc.ConnectionGroupPolicy
-        groups gbc.ConnectionGroupsMap
-        cc     chan string
-        mutex  *sync.Mutex
+        DefaultGroup *BasicConnectionGroup
+
+        onConnectFunc gbc.OnConnectFunc
+        groups        map[gbc.ConnectionGroup]bool
+        quit          chan int
+        mutex         *sync.Mutex
     }
 )
 
-func NewBasicConnectionManager(handler gbc.OnConnectHandler, policy gbc.ConnectionGroupPolicy) gbc.ConnectionManager {
-    if handler == nil {
-        handler = defaultOnConnectHandler
-    }
-    if policy == nil {
-        policy = NewAllInOneConnectionGroupPolicy(nil, nil)
-    }
+func NewBasicConnectionManager() *BasicConnectionManager {
     cm := &BasicConnectionManager{
-        ch:     handler,
-        policy: policy,
-        groups: make(gbc.ConnectionGroupsMap),
-        cc:     make(chan string),
-        mutex:  &sync.Mutex{},
+        DefaultGroup: NewBasicConnectionGroup("incoming", nil),
+        mutex:        &sync.Mutex{},
     }
-
     return cm
 }
 
 // interface ConnectionManager
 
+func (cm *BasicConnectionManager) OnConnect(f gbc.OnConnectFunc) {
+    cm.onConnectFunc = f
+}
+
 func (cm *BasicConnectionManager) Start(l net.Listener) (err error) {
     clog.PrintInfo("listening at: %s", l.Addr().String())
 
-    // handle CTRL+C
-    signCh := make(chan os.Signal)
-    signal.Notify(signCh, os.Interrupt)
-    go func() {
-        <-signCh
-        // sig is a ^C, handle it
-        clog.PrintInfo("signal os.Interrupt captured")
-        cm.cc <- "stop"
-    }()
+    cm.groups = make(map[gbc.ConnectionGroup]bool)
+    cm.quit = make(chan int)
 
     // handle connect
+    cm.DefaultGroup.Start()
     go cm.startAcceptConnect(l)
 
-    // waiting for connect, command
+    // waiting for quit
 loop:
     for {
         select {
-        case cmd := <-cm.cc:
-            if cmd == "stop" {
-                break loop
-            }
+        case <-cm.quit:
+            break loop
         }
     }
 
     // stop accept new connect
     l.Close()
 
-    // close all connections
+    // close all groups and clear
     for group := range cm.groups {
-        group.CloseAll()
+        group.Close()
     }
+    cm.groups = make(map[gbc.ConnectionGroup]bool)
 
-    clog.PrintInfo("shutdown")
+    clog.PrintInfo("closed")
     return
+}
+
+func (cm *BasicConnectionManager) Stop() {
+    if cm.quit != nil {
+        cm.quit <- 1
+        close(cm.quit)
+        cm.quit = nil
+    }
 }
 
 // private
@@ -114,17 +108,13 @@ func (cm *BasicConnectionManager) startAcceptConnect(l net.Listener) {
             continue
         }
 
-        // add connection to group
-        conn := cm.ch(rawConn)
-        cg := cm.policy.GetGroup(conn)
-        cg.Add(conn)
-        cm.groups[cg] = true
-
-        // start connection message loop
+        var conn gbc.Connection
+        if cm.onConnectFunc == nil {
+            conn = NewBasicConnection(rawConn, NewRawMessageInputFilter())
+        } else {
+            conn = cm.onConnectFunc(rawConn)
+        }
+        cm.DefaultGroup.Add(conn)
         conn.Start()
     }
-}
-
-func defaultOnConnectHandler(rawConn net.Conn) gbc.Connection {
-    return NewBasicConnection(rawConn, nil)
 }
