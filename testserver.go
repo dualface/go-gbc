@@ -27,26 +27,60 @@ import (
     "math/rand"
     "net"
     "os"
+    "os/signal"
     "time"
 
+    "github.com/dualface/go-cli-colorlog"
     "github.com/dualface/go-gbc/gbc"
     "github.com/dualface/go-gbc/gbc/impl"
 )
 
 const (
-    Host = "localhost"
+    Bind = "localhost"
     Port = "27010"
 )
 
 func main() {
     rand.Seed(time.Now().Unix())
 
-    addr := fmt.Sprintf("%s:%s", Host, Port)
+    // a worker pool, max 3 concurrence jobs
+    handler := impl.NewConcurrenceRawMessageHandler(3, func(m gbc.RawMessage) error {
+        fmt.Printf("%+v\n", m)
+        time.Sleep(time.Second / 2)
+        return nil
+    })
+
+    // start listening on specified addr
+    addr := fmt.Sprintf("%s:%s", Bind, Port)
     l, err := net.Listen("tcp", addr)
     if err == nil {
-        handler := impl.NewBasicRawMessageHandler(3, rawMessageHandler)
-        policy := impl.NewAllInOneConnectionGroupPolicy(nil, handler)
-        cm := impl.NewBasicConnectionManager(connectHandler, policy)
+        cm := impl.NewBasicConnectionManager()
+
+        // use filter chain process incoming bytes
+        cm.OnConnect(func(rawConn net.Conn) gbc.Connection {
+            p := impl.NewBasicInputPipeline()
+            p.Append(impl.NewBase64DecodeFilter())
+            p.Append(impl.NewXORFilter([]byte{0xff}))
+
+            // RawMessageInputFilter fetch rawMessage from bytes stream,
+            // and send rawMessage to connection group
+            p.Append(impl.NewRawMessageInputFilter())
+            return impl.NewBasicConnection(rawConn, p)
+        })
+
+        // forward message to worker pool
+        cm.DefaultGroup.OnRawMessage(handler.ReceiveRawMessage)
+
+        // handle CTRL+C
+        signCh := make(chan os.Signal)
+        signal.Notify(signCh, os.Interrupt)
+        go func() {
+            <-signCh
+            // sig is a ^C, handle it
+            clog.PrintInfo("signal os.Interrupt captured")
+            cm.Stop()
+        }()
+
         err = cm.Start(l)
     }
 
@@ -54,17 +88,4 @@ func main() {
         fmt.Printf("[ERR] %s\n\n", err)
         os.Exit(1)
     }
-}
-
-func connectHandler(rawConn net.Conn) gbc.Connection {
-    c := impl.NewBasicConnection(rawConn, nil)
-    c.Pipeline.Append(impl.NewBase64DecodeFilter())
-    c.Pipeline.Append(impl.NewXORFilter([]byte{0xff}))
-    c.Pipeline.Append(impl.NewRawMessageInputFilter())
-    return c
-}
-
-func rawMessageHandler(m gbc.RawMessage) {
-    fmt.Printf("%+v\n", m)
-    time.Sleep(time.Second * time.Duration(rand.Intn(3)+1))
 }
