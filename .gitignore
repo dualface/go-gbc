@@ -1,5 +1,8 @@
 .*
 
+# Binaries for raw message files
+*.testmsg
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
