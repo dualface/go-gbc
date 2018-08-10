@@ -28,6 +28,9 @@ import (
 
 type (
     Connection interface {
+        // all received message from connection will forward to this channel
+        RawMessageChannelSetter
+
         // start reading data from connection
         Start() error
 
@@ -36,14 +39,11 @@ type (
 
         // write bytes to connection
         Write([]byte) (int, error)
-
-        // all received message from connection will forward to this channel
-        SetMessageChannel(chan RawMessage)
     }
 
     ConnectionGroup interface {
         // set handler function for incoming rawMessage
-        OnRawMessage(OnRawMessageFunc)
+        RawMessageReceiverSetter
 
         // start message loop
         Start() error
@@ -58,7 +58,7 @@ type (
         Remove(c Connection) error
 
         // get message channel for group
-        MessageChan() chan RawMessage
+        RawMessageChan() chan RawMessage
 
         // write bytes to all connections in group
         BroadcastWrite([]byte)

@@ -39,4 +39,8 @@ type (
     RawMessageReceiverSetter interface {
         OnRawMessage(OnRawMessageFunc)
     }
+
+    RawMessageChannelSetter interface {
+        SetRawMessageChannel(chan RawMessage)
+    }
 )

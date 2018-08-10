@@ -28,17 +28,13 @@ type (
         WriteBytes(input []byte) (output []byte, err error)
     }
 
-    FilterRawMessageChannel interface {
-        SetRawMessageChannel(chan RawMessage)
-    }
-
     Filter interface {
         FilterByteWriter
     }
 
     InputFilter interface {
         Filter
-        FilterRawMessageChannel
+        RawMessageChannelSetter
     }
 
     OutputFilter interface {
@@ -52,7 +48,7 @@ type (
 
     InputPipeline interface {
         Pipeline
-        FilterRawMessageChannel
+        RawMessageChannelSetter
     }
 
     OutputPipeline interface {

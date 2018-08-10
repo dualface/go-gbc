@@ -88,7 +88,7 @@ func (c *BasicConnection) Write(b []byte) (writeLen int, err error) {
     return
 }
 
-func (c *BasicConnection) SetMessageChannel(mc chan gbc.RawMessage) {
+func (c *BasicConnection) SetRawMessageChannel(mc chan gbc.RawMessage) {
     c.MessageChan = mc
     if c.InputFilter != nil {
         c.InputFilter.SetRawMessageChannel(mc)

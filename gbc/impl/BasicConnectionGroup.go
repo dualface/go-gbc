@@ -108,7 +108,7 @@ func (g *BasicConnectionGroup) Add(c gbc.Connection) error {
         return fmt.Errorf("connection '%p' already exists in group '%p'", &c, g)
     }
     g.connections[c] = true
-    c.SetMessageChannel(g.messageChan)
+    c.SetRawMessageChannel(g.messageChan)
 
     return nil
 }
@@ -122,12 +122,12 @@ func (g *BasicConnectionGroup) Remove(c gbc.Connection) error {
         return fmt.Errorf("not found connection '%p' in group '%p'", &c, g)
     }
 
-    c.SetMessageChannel(nil)
+    c.SetRawMessageChannel(nil)
     delete(g.connections, c)
     return nil
 }
 
-func (g *BasicConnectionGroup) MessageChan() chan gbc.RawMessage {
+func (g *BasicConnectionGroup) RawMessageChan() chan gbc.RawMessage {
     return g.messageChan
 }
 

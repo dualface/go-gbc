@@ -78,7 +78,7 @@ func (p *BasicInputPipeline) SetRawMessageChannel(mc chan gbc.RawMessage) {
 // private
 
 func setFilterRawMessageChannel(f gbc.Filter, mc chan gbc.RawMessage) {
-    setter, ok := f.(gbc.FilterRawMessageChannel)
+    setter, ok := f.(gbc.RawMessageChannelSetter)
     if ok {
         setter.SetRawMessageChannel(mc)
     }
