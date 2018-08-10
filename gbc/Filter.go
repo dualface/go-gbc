@@ -20,42 +20,42 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package impl
-
-import (
-    "github.com/dualface/go-gbc/gbc"
-)
+package gbc
 
 type (
-    HandlerFunc func(gbc.RawMessage)
+    FilterByteWriter interface {
+        // write bytes to filter, return pointer of new buffer
+        WriteBytes(input []byte) (output []byte, err error)
+    }
 
-    ConcurrenceRawMessageReceiver struct {
-        semaphore   chan int
-        handlerFunc HandlerFunc
+    FilterRawMessageChannel interface {
+        SetRawMessageChannel(chan RawMessage)
+    }
+
+    Filter interface {
+        FilterByteWriter
+    }
+
+    InputFilter interface {
+        Filter
+        FilterRawMessageChannel
+    }
+
+    OutputFilter interface {
+        Filter
+    }
+
+    Pipeline interface {
+        FilterByteWriter
+        Append(f Filter)
+    }
+
+    InputPipeline interface {
+        Pipeline
+        FilterRawMessageChannel
+    }
+
+    OutputPipeline interface {
+        Pipeline
     }
 )
-
-func NewConcurrenceRawMessageReceiver(concurrence int, handler HandlerFunc) *ConcurrenceRawMessageReceiver {
-    if concurrence <= 1 {
-        concurrence = 1
-    }
-
-    r := &ConcurrenceRawMessageReceiver{
-        semaphore:   make(chan int, concurrence),
-        handlerFunc: handler,
-    }
-
-    return r
-}
-
-// interface MessagePipeline
-
-func (r *ConcurrenceRawMessageReceiver) OnReceiveRawMessage(m gbc.RawMessage) error {
-    // avoid blocking caller
-    go func() {
-        r.semaphore <- 1
-        r.handlerFunc(m)
-        <-r.semaphore
-    }()
-    return nil
-}

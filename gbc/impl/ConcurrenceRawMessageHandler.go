@@ -20,23 +20,40 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package gbc
+package impl
+
+import (
+    "github.com/dualface/go-gbc/gbc"
+)
 
 type (
-    RawMessage interface {
-        DataType() int
-        DataBytes() []byte
-        GenBytes() []byte
-    }
-
-    OnRawMessageFunc func(m RawMessage) error
-
-    RawMessageReceiver interface {
-        // when new rawMessage fetched, call this function
-        ReceiveRawMessage(RawMessage) error
-    }
-
-    RawMessageReceiverSetter interface {
-        OnRawMessage(OnRawMessageFunc)
+    ConcurrenceRawMessageHandler struct {
+        semaphore        chan int
+        onRawMessageFunc gbc.OnRawMessageFunc
     }
 )
+
+func NewConcurrenceRawMessageHandler(concurrence int, f gbc.OnRawMessageFunc) *ConcurrenceRawMessageHandler {
+    if concurrence <= 1 {
+        concurrence = 1
+    }
+
+    r := &ConcurrenceRawMessageHandler{
+        semaphore:        make(chan int, concurrence),
+        onRawMessageFunc: f,
+    }
+
+    return r
+}
+
+// interface MessagePipeline
+
+func (r *ConcurrenceRawMessageHandler) ReceiveRawMessage(m gbc.RawMessage) error {
+    // avoid blocking caller
+    go func() {
+        r.semaphore <- 1
+        r.onRawMessageFunc(m)
+        <-r.semaphore
+    }()
+    return nil
+}

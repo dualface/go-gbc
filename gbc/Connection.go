@@ -41,9 +41,6 @@ type (
         SetMessageChannel(chan RawMessage)
     }
 
-    // when new rawMessage fetched, call this function
-    OnRawMessageFunc func(m RawMessage) error
-
     ConnectionGroup interface {
         // set handler function for incoming rawMessage
         OnRawMessage(OnRawMessageFunc)
