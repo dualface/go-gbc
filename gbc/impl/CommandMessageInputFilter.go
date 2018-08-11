@@ -27,40 +27,40 @@ import (
 )
 
 type (
-    RawMessageInputFilter struct {
+    CommandMessageInputFilter struct {
         MessageChan chan gbc.RawMessage
 
         headerBuf    []byte
         headerOffset int
-        msg          *RawMessageImpl
+        msg          *CommandMessage
     }
 )
 
-func NewRawMessageInputFilter() *RawMessageInputFilter {
-    p := &RawMessageInputFilter{
-        headerBuf: make([]byte, RawMessageHeaderLen),
+func NewCommandMessageInputFilter() *CommandMessageInputFilter {
+    p := &CommandMessageInputFilter{
+        headerBuf: make([]byte, CommandMessageHeaderLen),
     }
     return p
 }
 
 // interface InputFilter
 
-func (f *RawMessageInputFilter) WriteBytes(input []byte) (output []byte, err error) {
+func (f *CommandMessageInputFilter) WriteBytes(input []byte) (output []byte, err error) {
     avail := len(input)
 
     for ; avail > 0; {
 
         if f.msg == nil {
-            if f.headerOffset < RawMessageHeaderLen {
+            if f.headerOffset < CommandMessageHeaderLen {
                 // fill header
                 writeLen := avail
-                if writeLen > RawMessageHeaderLen-f.headerOffset {
-                    writeLen = RawMessageHeaderLen - f.headerOffset
+                if writeLen > CommandMessageHeaderLen-f.headerOffset {
+                    writeLen = CommandMessageHeaderLen - f.headerOffset
                 }
 
                 copy(f.headerBuf[f.headerOffset:], input[0:writeLen])
                 f.headerOffset += writeLen
-                if f.headerOffset < RawMessageHeaderLen {
+                if f.headerOffset < CommandMessageHeaderLen {
                     // if header not filled, return
                     return
                 }
@@ -71,7 +71,7 @@ func (f *RawMessageInputFilter) WriteBytes(input []byte) (output []byte, err err
 
             // header is ready, create msg
             f.headerOffset = 0
-            f.msg, err = NewRawMessageFromHeaderBuf(f.headerBuf)
+            f.msg, err = NewCommandMessageFromHeaderBuf(f.headerBuf)
             if err != nil {
                 return
             }
@@ -103,6 +103,6 @@ func (f *RawMessageInputFilter) WriteBytes(input []byte) (output []byte, err err
     return
 }
 
-func (f *RawMessageInputFilter) SetRawMessageChannel(mc chan gbc.RawMessage) {
+func (f *CommandMessageInputFilter) SetRawMessageChannel(mc chan gbc.RawMessage) {
     f.MessageChan = mc
 }

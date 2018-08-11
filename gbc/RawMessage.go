@@ -24,9 +24,7 @@ package gbc
 
 type (
     RawMessage interface {
-        DataType() int
         DataBytes() []byte
-        GenBytes() []byte
     }
 
     OnRawMessageFunc func(m RawMessage) error

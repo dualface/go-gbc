@@ -27,18 +27,18 @@ import (
 )
 
 type (
-    ConcurrenceRawMessageHandler struct {
+    ConcurrenceMessageHandler struct {
         semaphore        chan int
         onRawMessageFunc gbc.OnRawMessageFunc
     }
 )
 
-func NewConcurrenceRawMessageHandler(concurrence int, f gbc.OnRawMessageFunc) *ConcurrenceRawMessageHandler {
+func NewConcurrenceMessageHandler(concurrence int, f gbc.OnRawMessageFunc) *ConcurrenceMessageHandler {
     if concurrence <= 1 {
         concurrence = 1
     }
 
-    r := &ConcurrenceRawMessageHandler{
+    r := &ConcurrenceMessageHandler{
         semaphore:        make(chan int, concurrence),
         onRawMessageFunc: f,
     }
@@ -48,7 +48,7 @@ func NewConcurrenceRawMessageHandler(concurrence int, f gbc.OnRawMessageFunc) *C
 
 // interface MessagePipeline
 
-func (r *ConcurrenceRawMessageHandler) ReceiveRawMessage(m gbc.RawMessage) error {
+func (r *ConcurrenceMessageHandler) ReceiveRawMessage(m gbc.RawMessage) error {
     // avoid blocking caller
     go func() {
         r.semaphore <- 1

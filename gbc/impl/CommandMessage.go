@@ -30,13 +30,13 @@ import (
 )
 
 const (
-    RawMessageMaxLen      = 64 * 1024 // 64KB, 0x010000
-    RawMessageHeaderLen   = 14        // (chunkSize uint32, mainCmdId uint16, subCmdId uint16, dataSize uint32, DataType uint16)
-    RawMessagePaddingSize = 8         // 8 bytes
+    CommandMessageMaxLen      = 64 * 1024 // 64KB, 0x010000
+    CommandMessageHeaderLen   = 14        // (chunkSize uint32, mainCmdId uint16, subCmdId uint16, dataSize uint32, DataType uint16)
+    CommandMessagePaddingSize = 8         // 8 bytes
 )
 
 type (
-    RawMessageImpl struct {
+    CommandMessage struct {
         chunkSize uint32 // length of chunk (exclude chunkSize)
         mainCmdId uint16
         subCmdId  uint16
@@ -48,14 +48,14 @@ type (
     }
 )
 
-func NewRawMessageFromHeaderBuf(buf []byte) (*RawMessageImpl, error) {
+func NewCommandMessageFromHeaderBuf(buf []byte) (*CommandMessage, error) {
     l := len(buf)
-    if l < RawMessageHeaderLen {
+    if l < CommandMessageHeaderLen {
         return nil, fmt.Errorf("output is not enough")
     }
 
     chunkSize := binary.LittleEndian.Uint32(buf[0:4])
-    if chunkSize > RawMessageMaxLen {
+    if chunkSize > CommandMessageMaxLen {
         return nil, fmt.Errorf("invalid chunk size header")
     }
 
@@ -68,9 +68,9 @@ func NewRawMessageFromHeaderBuf(buf []byte) (*RawMessageImpl, error) {
     if checkChunkSize != chunkSize {
         return nil, fmt.Errorf("invalid chunk size or data size")
     }
-    remains := chunkSize - RawMessageHeaderLen + 4
+    remains := chunkSize - CommandMessageHeaderLen + 4
 
-    c := &RawMessageImpl{
+    c := &CommandMessage{
         chunkSize: chunkSize,
         mainCmdId: mainCmdId,
         subCmdId:  subCmdId,
@@ -82,22 +82,22 @@ func NewRawMessageFromHeaderBuf(buf []byte) (*RawMessageImpl, error) {
     return c, nil
 }
 
-func NewRawMessageFromData(mainCmdId uint16, subCmdId uint16, dataType uint16, data []byte) *RawMessageImpl {
-    c := &RawMessageImpl{}
+func NewCommandMessageFromData(mainCmdId uint16, subCmdId uint16, dataType uint16, data []byte) *CommandMessage {
+    c := &CommandMessage{}
     c.mainCmdId = mainCmdId
     c.subCmdId = subCmdId
     c.dataType = dataType
     c.dataSize = uint32(len(data))
 
     chunkSize := calcChunkSize(c.dataSize)
-    paddedDataSize := chunkSize - RawMessageHeaderLen + 4
+    paddedDataSize := chunkSize - CommandMessageHeaderLen + 4
     c.data = make([]byte, paddedDataSize)
     copy(c.data, data)
     c.chunkSize = chunkSize
     return c
 }
 
-func (m *RawMessageImpl) WriteBytes(b []byte) (int, error) {
+func (m *CommandMessage) WriteBytes(b []byte) (int, error) {
     l := len(b)
     if l > m.remains {
         return 0, fmt.Errorf("write failed, buf bytes is %d, try to write %d", m.remains, l)
@@ -109,21 +109,23 @@ func (m *RawMessageImpl) WriteBytes(b []byte) (int, error) {
     return l, nil
 }
 
-func (m *RawMessageImpl) RemainsBytes() int {
+func (m *CommandMessage) RemainsBytes() int {
     return m.remains
 }
 
-// interface RawMessageImpl
+func (m *CommandMessage) MainCmdId() int {
+    return int(m.mainCmdId)
+}
 
-func (m *RawMessageImpl) DataType() int {
+func (m *CommandMessage) SubCmdId() int {
+    return int(m.subCmdId)
+}
+
+func (m *CommandMessage) DataType() int {
     return int(m.dataType)
 }
 
-func (m *RawMessageImpl) DataBytes() []byte {
-    return m.data[:m.dataSize]
-}
-
-func (m *RawMessageImpl) GenBytes() []byte {
+func (m *CommandMessage) GenBytes() []byte {
     var buf bytes.Buffer
 
     binary.Write(&buf, binary.LittleEndian, m.chunkSize)
@@ -136,9 +138,15 @@ func (m *RawMessageImpl) GenBytes() []byte {
     return buf.Bytes()
 }
 
+// interface CommandMessage
+
+func (m *CommandMessage) DataBytes() []byte {
+    return m.data[:m.dataSize]
+}
+
 // interface String
 
-func (m *RawMessageImpl) String() string {
+func (m *CommandMessage) String() string {
     sb := &strings.Builder{}
     fmt.Fprintf(sb, "chunk:%d,", m.chunkSize)
     fmt.Fprintf(sb, "main:%d,", m.mainCmdId)
@@ -146,7 +154,7 @@ func (m *RawMessageImpl) String() string {
     fmt.Fprintf(sb, "size:%d,", m.dataSize)
     fmt.Fprintf(sb, "type:%d [", m.dataType)
 
-    l := int(m.chunkSize - RawMessageHeaderLen + 4)
+    l := int(m.chunkSize - CommandMessageHeaderLen + 4)
     for i := 0; i < l; i++ {
         fmt.Fprintf(sb, "%02X", m.data[i])
         if i < l-1 {
@@ -159,10 +167,10 @@ func (m *RawMessageImpl) String() string {
 }
 
 func calcChunkSize(dataSize uint32) uint32 {
-    size := dataSize + RawMessageHeaderLen - 4
-    m := size % RawMessagePaddingSize
+    size := dataSize + CommandMessageHeaderLen - 4
+    m := size % CommandMessagePaddingSize
     if m > 0 {
-        size = (size - m) + RawMessagePaddingSize
+        size = (size - m) + CommandMessagePaddingSize
     }
     return size
 }

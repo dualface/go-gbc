@@ -44,7 +44,7 @@ func main() {
     rand.Seed(time.Now().Unix())
 
     // a worker pool, max 3 concurrence jobs
-    handler := impl.NewConcurrenceRawMessageHandler(3, func(m gbc.RawMessage) error {
+    handler := impl.NewConcurrenceMessageHandler(3, func(m gbc.RawMessage) error {
         fmt.Printf("%+v\n", m)
         time.Sleep(time.Second / 2)
         return nil
@@ -62,9 +62,9 @@ func main() {
             p.Append(impl.NewBase64DecodeFilter())
             p.Append(impl.NewXORFilter([]byte{0xff}))
 
-            // RawMessageInputFilter fetch rawMessage from bytes stream,
-            // and send rawMessage to connection group
-            p.Append(impl.NewRawMessageInputFilter())
+            // CommandMessageInputFilter fetch CommandMessage from bytes stream,
+            // and send message to connection group
+            p.Append(impl.NewCommandMessageInputFilter())
             return impl.NewBasicConnection(rawConn, p)
         })
 

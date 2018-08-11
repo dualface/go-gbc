@@ -110,7 +110,7 @@ func (cm *BasicConnectionManager) startAcceptConnect(l net.Listener) {
 
         var conn gbc.Connection
         if cm.onConnectFunc == nil {
-            conn = NewBasicConnection(rawConn, NewRawMessageInputFilter())
+            conn = NewBasicConnection(rawConn, NewCommandMessageInputFilter())
         } else {
             conn = cm.onConnectFunc(rawConn)
         }
