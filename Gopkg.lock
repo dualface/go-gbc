@@ -13,9 +13,26 @@
   revision = "2a1b6e6fd283a7a96cd60070d73c31d88f1a7391"
   version = "0.0.1"
 
+[[projects]]
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  revision = "b4deda0973fb4c70b50d226b1af49f3da59f5265"
+  version = "v1.1.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/yuin/gopher-lua"
+  packages = [
+    ".",
+    "ast",
+    "parse",
+    "pm"
+  ]
+  revision = "46796da1b0b4794e1e341883a399f12cc7574b55"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "988b6312c912a710d45ac1ab2accbe628447f1d36af6e3b97045d11f2639ad72"
+  inputs-digest = "3ededbf73795aad67428424511111b7b1ebc4d67f5bdad9db0fc35022cb6edfd"
   solver-name = "gps-cdcl"
   solver-version = 1
