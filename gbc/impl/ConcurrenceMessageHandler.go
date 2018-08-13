@@ -46,7 +46,7 @@ func NewConcurrenceMessageHandler(concurrence int, f gbc.OnRawMessageFunc) *Conc
     return r
 }
 
-// interface MessagePipeline
+// interface RawMessageReceiver
 
 func (r *ConcurrenceMessageHandler) ReceiveRawMessage(m gbc.RawMessage) error {
     // avoid blocking caller

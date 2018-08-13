@@ -47,7 +47,7 @@ func NewConcurrenceLuaMessageHandler(concurrence int, luaDir string, luaFile str
     return r
 }
 
-// interface MessagePipeline
+// interface RawMessageReceiver
 
 func (r *ConcurrenceLuaMessageHandler) ReceiveRawMessage(m gbc.RawMessage) error {
     // avoid blocking caller
