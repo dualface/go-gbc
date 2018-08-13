@@ -33,6 +33,9 @@ const (
     CommandMessageMaxLen      = 64 * 1024 // 64KB, 0x010000
     CommandMessageHeaderLen   = 14        // (chunkSize uint32, mainCmdId uint16, subCmdId uint16, dataSize uint32, DataType uint16)
     CommandMessagePaddingSize = 8         // 8 bytes
+
+    CommandMessageProtobufType = 1
+    CommandMessageClangType    = 2
 )
 
 type (
