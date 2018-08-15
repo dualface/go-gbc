@@ -1,15 +1,7 @@
-local string_format = string.format
 local pairs = pairs
 
-local ok, table_new = pcall(require, "table.new")
-if not ok or type(table_new) ~= "function" then
-    function table:new()
-        return {}
-    end
-end
-
-local _copy
-_copy = function(t, lookup)
+local copy
+copy = function(t, lookup)
     if type(t) ~= "table" then
         return t
     elseif lookup[t] then
@@ -18,14 +10,14 @@ _copy = function(t, lookup)
     local n = {}
     lookup[t] = n
     for key, value in pairs(t) do
-        n[_copy(key, lookup)] = _copy(value, lookup)
+        n[copy(key, lookup)] = copy(value, lookup)
     end
     return n
 end
 
 function table.copy(t)
     local lookup = {}
-    return _copy(t, lookup)
+    return copy(t, lookup)
 end
 
 function table.keys(hashtable)
@@ -80,17 +72,4 @@ function table.length(t)
         count = count + 1
     end
     return count
-end
-
-function table.readonly(t, name)
-    name = name or "table"
-    setmetatable(t, {
-        __newindex = function()
-            error(string_format("<%s:%s> is readonly table", name, tostring(t)))
-        end,
-        __index = function(_, key)
-            error(string_format("<%s:%s> not found key: %s", name, tostring(t), key))
-        end
-    })
-    return t
 end

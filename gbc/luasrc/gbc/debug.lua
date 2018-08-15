@@ -1,9 +1,3 @@
-local ngx = ngx
-local ngx_log = nil
-if ngx then
-    ngx_log = ngx.log
-end
-
 local debug_traceback = debug.traceback
 local error = error
 local print = print
@@ -12,7 +6,7 @@ local string_rep = string.rep
 local string_upper = string.upper
 local tostring = tostring
 
-function gbc.throw(fmt, ...)
+function gbc.RaiseError(fmt, ...)
     local msg
     if #{ ... } == 0 then
         msg = fmt
@@ -26,14 +20,14 @@ function gbc.throw(fmt, ...)
     end
 end
 
-local function _dump_value(v)
+local function dumpValue(v)
     if type(v) == "string" then
         v = "\"" .. v .. "\""
     end
     return tostring(v)
 end
 
-function gbc.dump(value, desciption, nesting, _print)
+function gbc.Dump(value, desciption, nesting, _print)
     if type(nesting) ~= "number" then nesting = 3 end
     _print = _print or print
 
@@ -46,25 +40,25 @@ function gbc.dump(value, desciption, nesting, _print)
         desciption = desciption or "<var>"
         local spc = ""
         if type(keylen) == "number" then
-            spc = string_rep(" ", keylen - string.len(_dump_value(desciption)))
+            spc = string_rep(" ", keylen - string.len(dumpValue(desciption)))
         end
         if type(value) ~= "table" then
-            result[#result + 1] = string_format("%s%s%s = %s", indent, _dump_value(desciption), spc, _dump_value(value))
+            result[#result + 1] = string_format("%s%s%s = %s", indent, dumpValue(desciption), spc, dumpValue(value))
         elseif lookup[tostring(value)] then
-            result[#result + 1] = string_format("%s%s%s = *REF*", indent, _dump_value(desciption), spc)
+            result[#result + 1] = string_format("%s%s%s = *REF*", indent, dumpValue(desciption), spc)
         else
             lookup[tostring(value)] = true
             if nest > nesting then
-                result[#result + 1] = string_format("%s%s = *MAX NESTING*", indent, _dump_value(desciption))
+                result[#result + 1] = string_format("%s%s = *MAX NESTING*", indent, dumpValue(desciption))
             else
-                result[#result + 1] = string_format("%s%s = {", indent, _dump_value(desciption))
+                result[#result + 1] = string_format("%s%s = {", indent, dumpValue(desciption))
                 local indent2 = indent .. "    "
                 local keys = {}
                 local keylen = 0
                 local values = {}
                 for k, v in pairs(value) do
                     keys[#keys + 1] = k
-                    local vk = _dump_value(k)
+                    local vk = dumpValue(k)
                     local vkl = string.len(vk)
                     if vkl > keylen then keylen = vkl end
                     values[k] = v
@@ -90,21 +84,12 @@ function gbc.dump(value, desciption, nesting, _print)
     end
 end
 
-function gbc.printf(fmt, ...)
+function gbc.Printf(fmt, ...)
     print(string_format(tostring(fmt), ...))
 end
 
-function gbc.printlog(tag, fmt, ...)
+function gbc.PrintLog(tag, fmt, ...)
     fmt = tostring(fmt)
-    if ngx_log then
-        if tag == "ERR" and gbc.DEBUG > gbc.DEBUG_WARN then
-            ngx_log(ngx.ERR, string_format(fmt, ...) .. "\n" .. debug_traceback("", 3))
-        else
-            ngx_log(ngx[tag], string_format(fmt, ...))
-        end
-        return
-    end
-
     local t = {
         "[",
         string_upper(tostring(tag)),
@@ -117,26 +102,26 @@ function gbc.printlog(tag, fmt, ...)
     print(table.concat(t))
 end
 
-local _printlog = gbc.printlog
+local printLog = gbc.PrintLog
 
-function gbc.printerror(fmt, ...)
-    _printlog("ERR", fmt, ...)
+function gbc.PrintError(fmt, ...)
+    printLog("ERR", fmt, ...)
 end
 
-function gbc.printdebug(fmt, ...)
+function gbc.PrintDebug(fmt, ...)
     if gbc.DEBUG >= gbc.DEBUG_VERBOSE then
-        _printlog("DEBUG", fmt, ...)
+        printLog("DEBUG", fmt, ...)
     end
 end
 
-function gbc.printinfo(fmt, ...)
+function gbc.PrintInfo(fmt, ...)
     if gbc.DEBUG >= gbc.DEBUG_INFO then
-        _printlog("INFO", fmt, ...)
+        printLog("INFO", fmt, ...)
     end
 end
 
-function gbc.printwarn(fmt, ...)
+function gbc.PrintWarn(fmt, ...)
     if gbc.DEBUG >= gbc.DEBUG_WARN then
-        _printlog("WARN", fmt, ...)
+        printLog("WARN", fmt, ...)
     end
 end

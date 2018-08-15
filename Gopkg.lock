@@ -14,6 +14,18 @@
   version = "0.0.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/globalsign/mgo"
+  packages = [
+    ".",
+    "bson",
+    "internal/json",
+    "internal/sasl",
+    "internal/scram"
+  ]
+  revision = "113d3961e7311526535a1ef7042196563d442761"
+
+[[projects]]
   name = "github.com/golang/protobuf"
   packages = ["proto"]
   revision = "b4deda0973fb4c70b50d226b1af49f3da59f5265"
@@ -30,9 +42,15 @@
   ]
   revision = "46796da1b0b4794e1e341883a399f12cc7574b55"
 
+[[projects]]
+  name = "layeh.com/gopher-luar"
+  packages = ["."]
+  revision = "2518c8179c6de77f760f5a82df43f6f9a8ad8657"
+  version = "v1.0.4"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3ededbf73795aad67428424511111b7b1ebc4d67f5bdad9db0fc35022cb6edfd"
+  inputs-digest = "8ad8c0c00e34a280bbacf917c7e5ccc8e7654a622e5a73e7b90981df7bd3ba94"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -4,18 +4,18 @@ else
     error("ERR: NOT FOUND GLOBAL VAR 'WORKER'")
 end
 
-require("framework.init")
-
-local GBCHandler = require("gbc.handler")
+require("stdlib.ext")
+require("gbc.init")
 
 local function main()
-    gbc.dump(WORKER, "WORKER")
-
-    -- @var GBCHandler
-    local handler = GBCHandler.new(WORKER.ID, WORKER.MESSAGE_CHAN, WORKER.WORKER_CHAN)
-    handler:startLoop()
+    --- @type gbc.MessageHandler
+    local handler = gbc.MessageHandler.New(WORKER.ID, WORKER.WORKER_CHAN, WORKER.INPUT_CHAN, WORKER.OUTPUT_CHAN)
+    handler:StartLoop()
 end
 
 --
 
-main()
+xpcall(main, function(err)
+    print(err)
+    print(debug.traceback())
+end)

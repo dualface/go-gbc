@@ -33,3 +33,11 @@
   go-tests = true
   unused-packages = true
 
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/globalsign/mgo"
+
+[[constraint]]
+  name = "layeh.com/gopher-luar"
+  version = "1.0.4"

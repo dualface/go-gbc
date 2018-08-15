@@ -6,22 +6,13 @@ local string_sub = string.sub
 
 gbc = gbc or {}
 
-socket = {} -- avoid require("socket") warning
-
--- export global variable
-local _g = _G
-gbc.exports = {}
-setmetatable(gbc.exports, {
-    __newindex = function(_, name, value)
-        rawset(_g, name, value)
-    end,
-
-    __index = function(_, name)
-        return rawget(_g, name)
-    end
-})
-
 -- disable create unexpected global variable
+local _g = _G
+
+function gbc.SetGlobal(name, value)
+    rawset(_g, name, value)
+end
+
 setmetatable(_g, {
     __newindex = function(_, name, value)
         local msg = string_format("USE \"gbc.exports.%s = <value>\" INSTEAD OF SET GLOBAL VARIABLE", name)
@@ -40,7 +31,7 @@ gbc.DEBUG = gbc.DEBUG_DEBUG
 
 local _loaded = {}
 -- loader
-function gbc.import(name, current)
+function gbc.Import(name, current)
     local _name = name
     local first = string_byte(name)
     if first ~= 46 and _loaded[name] then
@@ -75,11 +66,7 @@ function gbc.import(name, current)
 end
 
 -- load basics modules
-require("framework.class")
-require("framework.table")
-require("framework.string")
-require("framework.debug")
-require("framework.math")
-require("framework.ctype")
-require("framework.os")
-require("framework.io")
+require("gbc.class")
+require("gbc.debug")
+require("gbc.ctype")
+require("gbc.class.MessageHandler")
