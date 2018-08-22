@@ -11,6 +11,7 @@ import (
     "github.com/dualface/go-gbc/gbc/protoconv"
     "github.com/yuin/gopher-lua"
     "layeh.com/gopher-luar"
+    "reflect"
 )
 
 type (
@@ -115,7 +116,11 @@ func (h *ConcurrenceLuaHandler) convertMessageToLuaValue(L *lua.LState, m gbc.Ra
             return nil, err
         }
         lv := luar.New(L, pb)
-        return lv, nil
+        typeName := lua.LString(reflect.TypeOf(pb).String())
+        tb := L.NewTable()
+        tb.RawSetString("type", lua.LString(typeName))
+        tb.RawSetString("msg", lv)
+        return tb, nil
 
     default:
         return nil, fmt.Errorf("%T not support DataType %d", h, msg.DataType())
