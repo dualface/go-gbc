@@ -3,6 +3,7 @@ package lualib
 import (
     "fmt"
     "path/filepath"
+    "reflect"
     "strconv"
 
     "github.com/dualface/go-cli-colorlog"
@@ -11,7 +12,6 @@ import (
     "github.com/dualface/go-gbc/gbc/protoconv"
     "github.com/yuin/gopher-lua"
     "layeh.com/gopher-luar"
-    "reflect"
 )
 
 type (
@@ -61,6 +61,18 @@ func (h *ConcurrenceLuaHandler) RegisterModuleLoader(loader func(*lua.LState)) {
 func (h *ConcurrenceLuaHandler) RegisterType(name string, vt interface{}) {
     for _, L := range h.luaStates {
         L.SetGlobal(name, luar.NewType(L, vt))
+    }
+}
+
+func (h *ConcurrenceLuaHandler) RegisterGlobalVar(name string, v interface{}) {
+    for _, L := range h.luaStates {
+        L.SetGlobal(name, luar.New(L, v))
+    }
+}
+
+func (h *ConcurrenceLuaHandler) RegisterGlobalFunc(name string, f lua.LGFunction) {
+    for _, L := range h.luaStates {
+        L.SetGlobal(name, L.NewFunction(f))
     }
 }
 
